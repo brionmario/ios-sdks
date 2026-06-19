@@ -1,4 +1,3 @@
-// swift-tools-version: 5.9
 /*
  * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
  *
@@ -16,23 +15,17 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import PackageDescription
 
-let appTarget: Target = .executableTarget(
-    name: "Quickstart",
-    dependencies: [
-        .product(name: "ThunderIDSwiftUI", package: "ios-sdks")
-    ],
-    path: "Sources",
-    resources: [.process("Config.plist")]
-)
+import SwiftUI
 
-let package = Package(
-    name: "Quickstart",
-    platforms: [.iOS(.v16), .macOS(.v13)],
-    dependencies: [
-        // .package(url: "https://github.com/brionmario/thunderid-ios", branch: "main"),
-        .package(path: "../..")
-    ],
-    targets: [appTarget]
-)
+/// Environment key for the ThunderID auth state (spec §7.2).
+struct ThunderIDStateKey: EnvironmentKey {
+    static let defaultValue: ThunderIDState? = nil
+}
+
+public extension EnvironmentValues {
+    var thunderState: ThunderIDState? {
+        get { self[ThunderIDStateKey.self] }
+        set { self[ThunderIDStateKey.self] = newValue }
+    }
+}

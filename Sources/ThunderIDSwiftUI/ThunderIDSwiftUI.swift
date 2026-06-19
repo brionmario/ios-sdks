@@ -1,4 +1,3 @@
-// swift-tools-version: 5.9
 /*
  * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
  *
@@ -16,23 +15,23 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import PackageDescription
 
-let appTarget: Target = .executableTarget(
-    name: "Quickstart",
-    dependencies: [
-        .product(name: "ThunderIDSwiftUI", package: "ios-sdks")
-    ],
-    path: "Sources",
-    resources: [.process("Config.plist")]
-)
-
-let package = Package(
-    name: "Quickstart",
-    platforms: [.iOS(.v16), .macOS(.v13)],
-    dependencies: [
-        // .package(url: "https://github.com/brionmario/thunderid-ios", branch: "main"),
-        .package(path: "../..")
-    ],
-    targets: [appTarget]
-)
+/// ThunderIDSwiftUI — Core Lib SDK for iOS / macOS (spec §2.5).
+///
+/// Drop-in SwiftUI components for ThunderID identity management.
+/// Depends on the ThunderID iOS Platform SDK; never imports UIKit.
+///
+/// Usage:
+/// ```swift
+/// import ThunderIDSwiftUI
+///
+/// @main struct MyApp: App {
+///     var body: some Scene {
+///         WindowGroup {
+///             ContentView()
+///                 .thunderIDProvider(config: ThunderIDConfig(baseUrl: "...", clientId: "..."))
+///         }
+///     }
+/// }
+/// ```
+@_exported import ThunderID
