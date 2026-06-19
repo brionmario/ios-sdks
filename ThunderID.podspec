@@ -7,7 +7,7 @@ Pod::Spec.new do |s|
   DESC
   s.homepage         = 'https://thunderid.dev'
   s.license          = { :type => 'Apache License 2.0', :file => 'LICENSE' }
-  s.author           = { 'Thunder' => 'dev@thunderid.dev' }
+  s.author           = { 'ThunderID' => 'dev@thunderid.dev' }
   s.source           = { :path => '.' }
   s.source_files     = 'Sources/ThunderID/**/*.swift'
   s.platform         = :ios, '16.0'

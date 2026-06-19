@@ -73,7 +73,7 @@ jobs:
             ${{ runner.os }}-swift-
 
       - name: 🔨 Build SDK
-        run: swift build -v
+        run: swift build
 
   test:
     name: 🧪 Run Tests
@@ -114,4 +114,4 @@ jobs:
 
       - name: 🔨 Build Quickstart Sample
         working-directory: Samples/Quickstart
-        run: swift build -v
+        run: swift build

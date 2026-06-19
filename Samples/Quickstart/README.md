@@ -1,6 +1,6 @@
-# Thunder iOS B2C Sample
+# ThunderID iOS B2C Sample
 
-Demonstrates a native iOS B2C flow using the ThunderSwiftUI SDK:
+Demonstrates a native iOS B2C flow using the ThunderIDSwiftUI SDK:
 
 - Unauthenticated → embedded sign-in form (Flow Execution API)
 - Authenticated → user avatar dropdown, organization switcher, editable profile sheet
@@ -10,7 +10,7 @@ Demonstrates a native iOS B2C flow using the ThunderSwiftUI SDK:
 
 ```bash
 cp Config.plist.example Sources/Config.plist
-# Edit Sources/Config.plist with your Thunder base URL, client ID, and application ID
+# Edit Sources/Config.plist with your ThunderID base URL, client ID, and application ID
 ```
 
 ## Run
@@ -19,4 +19,4 @@ Open in Xcode via `Package.swift` and run on an iOS 16+ simulator or device.
 
 ## SDK used
 
-`ThunderSwiftUI` at `sdks/thunderid-swiftui/` — depends on the `Thunder` iOS Platform SDK at `sdks/thunderid-ios/`.
+`ThunderIDSwiftUI` at `sdks/thunderid-swiftui/` — depends on the `ThunderID` iOS Platform SDK at `sdks/thunderid-ios/`.

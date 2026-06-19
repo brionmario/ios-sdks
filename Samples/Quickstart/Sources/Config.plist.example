@@ -9,8 +9,8 @@
     <key>THUNDERID_APPLICATION_ID</key>
     <string>your-application-id</string>
     <key>THUNDERID_AFTER_SIGN_IN_URL</key>
-    <string>io.thunder.b2c://callback</string>
+    <string>dev.thunderid.quickstart://callback</string>
     <key>THUNDERID_AFTER_SIGN_OUT_URL</key>
-    <string>io.thunder.b2c://logout</string>
+    <string>dev.thunderid.quickstart://logout</string>
 </dict>
 </plist>

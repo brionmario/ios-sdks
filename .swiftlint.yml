@@ -1,5 +1,5 @@
 excluded:
-  - .build
+  - "**/.build"
   - Tests
 
 opt_in_rules:
@@ -34,7 +34,7 @@ disabled_rules:
 line_length: 120
 
 type_body_length:
-  warning: 300
+  warning: 350
   error: 400
 
 file_length:

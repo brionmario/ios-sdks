@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		DEADBEEF000000000011DEAD /* ThunderSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = DEADBEEF000000000010DEAD /* ThunderSwiftUI */; };
+		DEADBEEF000000000011DEAD /* ThunderIDSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = DEADBEEF000000000010DEAD /* ThunderIDSwiftUI */; };
 		DEADBEEF000000000012DEAD /* Sources/Config.plist in Resources */ = {isa = PBXBuildFile; fileRef = DEADBEEF000000000013DEAD /* Sources/Config.plist */; };
 /* End PBXBuildFile section */
 
@@ -29,7 +29,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DEADBEEF000000000011DEAD /* ThunderSwiftUI in Frameworks */,
+				DEADBEEF000000000011DEAD /* ThunderIDSwiftUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -73,7 +73,7 @@
 			);
 			name = Quickstart;
 			packageProductDependencies = (
-				DEADBEEF000000000010DEAD /* ThunderSwiftUI */,
+				DEADBEEF000000000010DEAD /* ThunderIDSwiftUI */,
 			);
 			productName = Quickstart;
 			productReference = DEADBEEF000000000002DEAD /* Quickstart.app */;
@@ -331,10 +331,10 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		DEADBEEF000000000010DEAD /* ThunderSwiftUI */ = {
+		DEADBEEF000000000010DEAD /* ThunderIDSwiftUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = DEADBEEF00000000000FDEAD /* XCLocalSwiftPackageReference "../.." */;
-			productName = ThunderSwiftUI;
+			productName = ThunderIDSwiftUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

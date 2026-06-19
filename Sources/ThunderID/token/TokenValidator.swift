@@ -1,5 +1,23 @@
-import Foundation
+/*
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import CryptoKit
+import Foundation
 
 /// Validates ID tokens per spec §11.4: signature (JWKS), iss, aud, exp, nonce.
 final class TokenValidator {
@@ -16,46 +34,52 @@ final class TokenValidator {
 
         let parts = idToken.split(separator: ".").map(String.init)
         guard parts.count == 3 else {
-            throw IAMError(code: .authenticationFailed, message: "Malformed ID token")
+            throw ThunderIDError(code: .authenticationFailed, message: "Malformed ID token")
         }
 
         let payload = try decodePayload(parts[1])
 
         if config.tokenValidation.validateIssuer {
             guard let iss = payload["iss"] as? String, iss == config.baseUrl else {
-                throw IAMError(code: .authenticationFailed, message: "ID token iss mismatch")
+                throw ThunderIDError(code: .authenticationFailed, message: "ID token iss mismatch")
             }
         }
 
-        if let clientId = config.clientId {
-            let aud = payload["aud"]
-            let audValid: Bool
-            if let audString = aud as? String {
-                audValid = audString == clientId
-            } else if let audArray = aud as? [String] {
-                audValid = audArray.contains(clientId)
-            } else {
-                audValid = false
-            }
-            guard audValid else {
-                throw IAMError(code: .authenticationFailed, message: "ID token aud mismatch")
-            }
-        }
-
-        if let exp = payload["exp"] as? TimeInterval {
-            let tolerance = TimeInterval(config.tokenValidation.clockTolerance)
-            guard Date().timeIntervalSince1970 <= exp + tolerance else {
-                throw IAMError(code: .sessionExpired, message: "ID token has expired")
-            }
-        }
-
-        if let expectedNonce = nonce, let tokenNonce = payload["nonce"] as? String {
-            guard tokenNonce == expectedNonce else {
-                throw IAMError(code: .authenticationFailed, message: "ID token nonce mismatch")
-            }
-        }
-
+        try validateAudience(payload)
+        try validateExpiry(payload)
+        try validateNonce(payload, nonce: nonce)
         try await verifySignature(token: idToken, parts: parts)
+    }
+
+    private func validateAudience(_ payload: [String: Any]) throws {
+        guard let clientId = config.clientId else { return }
+        let aud = payload["aud"]
+        let audValid: Bool
+        if let audString = aud as? String {
+            audValid = audString == clientId
+        } else if let audArray = aud as? [String] {
+            audValid = audArray.contains(clientId)
+        } else {
+            audValid = false
+        }
+        guard audValid else {
+            throw ThunderIDError(code: .authenticationFailed, message: "ID token aud mismatch")
+        }
+    }
+
+    private func validateExpiry(_ payload: [String: Any]) throws {
+        guard let exp = payload["exp"] as? TimeInterval else { return }
+        let tolerance = TimeInterval(config.tokenValidation.clockTolerance)
+        guard Date().timeIntervalSince1970 <= exp + tolerance else {
+            throw ThunderIDError(code: .sessionExpired, message: "ID token has expired")
+        }
+    }
+
+    private func validateNonce(_ payload: [String: Any], nonce: String?) throws {
+        guard let expectedNonce = nonce, let tokenNonce = payload["nonce"] as? String else { return }
+        guard tokenNonce == expectedNonce else {
+            throw ThunderIDError(code: .authenticationFailed, message: "ID token nonce mismatch")
+        }
     }
 
     private func verifySignature(token: String, parts: [String]) async throws {
@@ -64,7 +88,7 @@ final class TokenValidator {
         if !verified {
             keys = try await jwksCache.getKeys(forceRefresh: true)
             guard tryVerify(headerB64: parts[0], payloadB64: parts[1], signatureB64: parts[2], keys: keys) else {
-                throw IAMError(code: .authenticationFailed, message: "ID token signature verification failed")
+                throw ThunderIDError(code: .authenticationFailed, message: "ID token signature verification failed")
             }
         }
     }
@@ -85,10 +109,8 @@ final class TokenValidator {
             return false
         }
 
-        for key in matchingKeys {
-            if verifyRSA(signingData: signingData, signature: sigData, jwk: key) {
-                return true
-            }
+        for key in matchingKeys where verifyRSA(signingData: signingData, signature: sigData, jwk: key) {
+            return true
         }
         return false
     }
@@ -151,7 +173,7 @@ final class TokenValidator {
     private func decodePayload(_ base64url: String) throws -> [String: Any] {
         guard let data = Data(base64URLEncoded: base64url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw IAMError(code: .authenticationFailed, message: "Failed to decode token payload")
+            throw ThunderIDError(code: .authenticationFailed, message: "Failed to decode token payload")
         }
         return json
     }
@@ -159,7 +181,7 @@ final class TokenValidator {
     private func decodeHeader(_ base64url: String) throws -> [String: Any] {
         guard let data = Data(base64URLEncoded: base64url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw IAMError(code: .authenticationFailed, message: "Failed to decode token header")
+            throw ThunderIDError(code: .authenticationFailed, message: "Failed to decode token header")
         }
         return json
     }

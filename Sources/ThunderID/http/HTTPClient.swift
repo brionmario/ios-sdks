@@ -1,3 +1,21 @@
+/*
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import Foundation
 
 /// Performs HTTP requests against the ThunderID server. Enforces HTTPS and log sanitization (spec §11.5–11.6).
@@ -30,12 +48,14 @@ final class HTTPClient {
         let _: EmptyResponse = try await perform(request)
     }
 
-    private func buildRequest(method: String, path: String, body: [String: Any]?, requiresAuth: Bool) async throws -> URLRequest {
+    private func buildRequest(
+        method: String, path: String, body: [String: Any]?, requiresAuth: Bool
+    ) async throws -> URLRequest {
         guard let url = URL(string: baseUrl + path) else {
-            throw IAMError(code: .invalidConfiguration, message: "Invalid URL: \(baseUrl)\(path)")
+            throw ThunderIDError(code: .invalidConfiguration, message: "Invalid URL: \(baseUrl)\(path)")
         }
         guard url.scheme == "https" else {
-            throw IAMError(code: .invalidConfiguration, message: "baseUrl must use HTTPS")
+            throw ThunderIDError(code: .invalidConfiguration, message: "baseUrl must use HTTPS")
         }
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -59,45 +79,55 @@ final class HTTPClient {
         } catch {
             let nsError = error as NSError
             let details = "\(nsError.domain)(\(nsError.code)): \(nsError.localizedDescription)"
-            debugLog("HTTP network error for \(request.httpMethod ?? "?") \(request.url?.absoluteString ?? "") -> \(details)")
-            throw IAMError(
+            let urlStr = request.url?.absoluteString ?? ""
+            debugLog("HTTP network error for \(request.httpMethod ?? "?") \(urlStr) -> \(details)")
+            throw ThunderIDError(
                 code: .networkError,
                 message: "Network request failed: \(details)",
                 underlyingError: error
             )
         }
         guard let http = response as? HTTPURLResponse else {
-            throw IAMError(code: .networkError, message: "Invalid response")
+            throw ThunderIDError(code: .networkError, message: "Invalid response")
         }
         switch http.statusCode {
         case 200...299:
-            do {
-                if T.self == EmptyResponse.self {
-                    guard let result = EmptyResponse() as? T else {
-                        throw IAMError(code: .unknownError, message: "Type mismatch")
-                    }
-                    return result
-                }
-                return try JSONDecoder().decode(T.self, from: data)
-            } catch {
-                if let raw = String(data: data, encoding: .utf8) {
-                    debugLog("HTTP decode failure payload: \(raw)")
-                }
-                throw IAMError(code: .unknownError, message: "Failed to decode response", underlyingError: error)
-            }
+            return try decodeSuccess(data)
         case 400:
             let rawBody = String(data: data, encoding: .utf8) ?? "<non-utf8>"
             print("[DEBUG][HTTPClient] 400 response body: \(rawBody)")
-            let detail = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["message"] as? String ?? "Bad request"
-            throw IAMError(code: .invalidInput, message: detail)
+            let msgBody = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let detail = msgBody?["message"] as? String ?? "Bad request"
+            throw ThunderIDError(code: .invalidInput, message: detail)
         case 401:
-            throw IAMError(code: .authenticationFailed, message: "Unauthorized")
+            throw ThunderIDError(code: .authenticationFailed, message: "Unauthorized")
         case 409:
-            throw IAMError(code: .userAlreadyExists, message: "Conflict")
+            throw ThunderIDError(code: .userAlreadyExists, message: "Conflict")
         case 500...599:
-            throw IAMError(code: .serverError, message: "Server error: \(http.statusCode)")
+            throw ThunderIDError(code: .serverError, message: "Server error: \(http.statusCode)")
         default:
-            throw IAMError(code: .unknownError, message: "Unexpected status: \(http.statusCode)")
+            throw ThunderIDError(code: .unknownError, message: "Unexpected status: \(http.statusCode)")
+        }
+    }
+
+    private func decodeSuccess<T: Decodable>(_ data: Data) throws -> T {
+        if T.self == EmptyResponse.self {
+            guard let result = EmptyResponse() as? T else {
+                throw ThunderIDError(code: .unknownError, message: "Type mismatch")
+            }
+            return result
+        }
+        do {
+            return try JSONDecoder().decode(T.self, from: data)
+        } catch {
+            if let raw = String(data: data, encoding: .utf8) {
+                debugLog("HTTP decode failure payload: \(raw)")
+            }
+            throw ThunderIDError(
+                code: .unknownError,
+                message: "Failed to decode response",
+                underlyingError: error
+            )
         }
     }
 }

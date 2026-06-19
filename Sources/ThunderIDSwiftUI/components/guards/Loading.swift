@@ -1,4 +1,3 @@
-// swift-tools-version: 5.9
 /*
  * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
  *
@@ -16,23 +15,27 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import PackageDescription
 
-let appTarget: Target = .executableTarget(
-    name: "Quickstart",
-    dependencies: [
-        .product(name: "ThunderIDSwiftUI", package: "ios-sdks")
-    ],
-    path: "Sources",
-    resources: [.process("Config.plist")]
-)
+import SwiftUI
 
-let package = Package(
-    name: "Quickstart",
-    platforms: [.iOS(.v16), .macOS(.v13)],
-    dependencies: [
-        // .package(url: "https://github.com/brionmario/thunderid-ios", branch: "main"),
-        .package(path: "../..")
-    ],
-    targets: [appTarget]
-)
+/// Renders `indicator` while the SDK is initializing or mid-operation (spec §8.4 Guards).
+public struct Loading<Indicator: View>: View {
+    @EnvironmentObject private var state: ThunderIDState
+    private let indicator: Indicator
+
+    public init(@ViewBuilder indicator: () -> Indicator) {
+        self.indicator = indicator()
+    }
+
+    public var body: some View {
+        if state.isLoading {
+            indicator
+        }
+    }
+}
+
+public extension Loading where Indicator == ProgressView<EmptyView, EmptyView> {
+    init() {
+        self.init { ProgressView() }
+    }
+}

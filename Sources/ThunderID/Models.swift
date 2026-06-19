@@ -1,3 +1,21 @@
+/*
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 import Foundation
 
 public struct User: Codable {
@@ -85,13 +103,21 @@ public struct AnyCodable: Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        if let val = try? container.decode(String.self) { value = val }
-        else if let val = try? container.decode(Bool.self) { value = val }
-        else if let val = try? container.decode(Int.self) { value = val }
-        else if let val = try? container.decode(Double.self) { value = val }
-        else if let val = try? container.decode([String: AnyCodable].self) { value = val }
-        else if let val = try? container.decode([AnyCodable].self) { value = val }
-        else { value = NSNull() }
+        if let val = try? container.decode(String.self) {
+            value = val
+        } else if let val = try? container.decode(Bool.self) {
+            value = val
+        } else if let val = try? container.decode(Int.self) {
+            value = val
+        } else if let val = try? container.decode(Double.self) {
+            value = val
+        } else if let val = try? container.decode([String: AnyCodable].self) {
+            value = val
+        } else if let val = try? container.decode([AnyCodable].self) {
+            value = val
+        } else {
+            value = NSNull()
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -173,7 +199,12 @@ public struct EmbeddedSignInPayload {
     public var inputs: [String: String]
     public var challengeToken: String?
 
-    public init(flowId: String? = nil, actionId: String, inputs: [String: String] = [:], challengeToken: String? = nil) {
+    public init(
+        flowId: String? = nil,
+        actionId: String,
+        inputs: [String: String] = [:],
+        challengeToken: String? = nil
+    ) {
         self.flowId = flowId
         self.actionId = actionId
         self.inputs = inputs
