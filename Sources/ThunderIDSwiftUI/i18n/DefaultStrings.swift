@@ -28,6 +28,12 @@ public enum DefaultStrings {
         "userProfile.save": "Save",
         "userProfile.loading": "Loading profile…",
         "userProfile.saving": "Saving…",
+        "userProfile.edit": "Edit",
+        "userProfile.cancel": "Cancel",
+        "userProfile.error.load": "Failed to load profile.",
+        "userProfile.error.save": "Failed to save changes.",
+        "userProfile.validation.required": "This field is required.",
+        "userProfile.validation.pattern": "This value is not valid.",
         "languageSwitcher.title": "Language"
     ]
 }

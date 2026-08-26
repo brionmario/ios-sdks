@@ -15,6 +15,9 @@ public final class ThunderIDState: ObservableObject {
     public let client: ThunderIDClient
     public let i18n: ThunderIDI18n
 
+    /// Mirrors ``ThunderIDConfig/fetchUserProfile``.
+    public private(set) var fetchUserProfileEnabled: Bool = true
+
     public var isSignedIn: Bool { user != nil }
 
     init(client: ThunderIDClient, i18n: ThunderIDI18n) {
@@ -25,11 +28,13 @@ public final class ThunderIDState: ObservableObject {
     func initialize(config: ThunderIDConfig) async {
         isLoading = true
         defer { isLoading = false }
+        fetchUserProfileEnabled = config.fetchUserProfile
         do {
             _ = try await client.initialize(config: config)
             let signedIn = await (try? client.isSignedIn()) ?? false
             if signedIn {
                 user = try? await client.getUser()
+                if fetchUserProfileEnabled { launchUserProfileSync() }
             }
             isInitialized = true
             error = nil
@@ -47,9 +52,25 @@ public final class ThunderIDState: ObservableObject {
         do {
             let signedIn = try await client.isSignedIn()
             user = signedIn ? try await client.getUser() : nil
+            if signedIn && fetchUserProfileEnabled { launchUserProfileSync() }
             error = nil
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    /// Merges `profile`'s attributes into `user`'s claims and syncs the client's cache to match.
+    func mergeUserProfile(_ profile: ThunderID.UserProfile) {
+        guard let current = user else { return }
+        let merged = User(claims: current.claims.merging(profile.attributes) { _, new in new })
+        user = merged
+        client.setCachedUser(merged)
+    }
+
+    private func launchUserProfileSync() {
+        Task {
+            guard let profile = try? await client.getUserProfile() else { return }
+            mergeUserProfile(profile)
         }
     }
 

@@ -50,13 +50,67 @@ public struct User: Codable {
     }
 }
 
+/// The signed-in user's profile, as returned by `GET /users/me`.
 public struct UserProfile: Codable {
     public let id: String
-    public let claims: [String: AnyCodable]
+    public let ouId: String?
+    public let type: String?
+    public let attributes: [String: AnyCodable]
+    public let display: String?
+    public let isReadOnly: Bool
 
-    public init(id: String, claims: [String: AnyCodable]) {
+    public init(
+        id: String,
+        ouId: String? = nil,
+        type: String? = nil,
+        attributes: [String: AnyCodable] = [:],
+        display: String? = nil,
+        isReadOnly: Bool = false
+    ) {
         self.id = id
-        self.claims = claims
+        self.ouId = ouId
+        self.type = type
+        self.attributes = attributes
+        self.display = display
+        self.isReadOnly = isReadOnly
+    }
+}
+
+/// Attribute schema metadata returned by `GET /users/me/meta`.
+public struct AttributeSchema: Codable {
+    public let credential: Bool?
+    public let description: String?
+    public let displayName: String?
+    public let mutability: String?
+    public let readOnly: Bool?
+    public let regex: String?
+    public let required: Bool?
+    public let subAttributes: [AttributeSchema]?
+    public let type: String?
+    public let unique: Bool?
+
+    public init(
+        credential: Bool? = nil,
+        description: String? = nil,
+        displayName: String? = nil,
+        mutability: String? = nil,
+        readOnly: Bool? = nil,
+        regex: String? = nil,
+        required: Bool? = nil,
+        subAttributes: [AttributeSchema]? = nil,
+        type: String? = nil,
+        unique: Bool? = nil
+    ) {
+        self.credential = credential
+        self.description = description
+        self.displayName = displayName
+        self.mutability = mutability
+        self.readOnly = readOnly
+        self.regex = regex
+        self.required = required
+        self.subAttributes = subAttributes
+        self.type = type
+        self.unique = unique
     }
 }
 

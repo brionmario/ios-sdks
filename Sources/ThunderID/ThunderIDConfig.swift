@@ -26,6 +26,11 @@ public struct ThunderIDConfig {
     public var applicationId: String?
     public var organizationHandle: String?
 
+    // MARK: - User Profile
+    /// Whether user profile attributes come from `/users/me` or only from the OIDC
+    /// access-token/userinfo claims.
+    public var fetchUserProfile: Bool
+
     // MARK: - Platform Attestation
     /// When enabled, the token from ``attestationTokenProvider`` is sent as the
     /// `Attestation-Token` header on native flow-initiate requests.
@@ -58,6 +63,7 @@ public struct ThunderIDConfig {
         signUpOptions: [String: Any] = [:],
         applicationId: String? = nil,
         organizationHandle: String? = nil,
+        fetchUserProfile: Bool = true,
         attestationEnabled: Bool = false,
         attestationTokenProvider: (() async throws -> String)? = nil,
         tokenValidation: TokenValidationConfig = .init(),
@@ -78,6 +84,7 @@ public struct ThunderIDConfig {
         self.signUpOptions = signUpOptions
         self.applicationId = applicationId
         self.organizationHandle = organizationHandle
+        self.fetchUserProfile = fetchUserProfile
         self.attestationEnabled = attestationEnabled
         self.attestationTokenProvider = attestationTokenProvider
         self.tokenValidation = tokenValidation

@@ -36,6 +36,19 @@ final class HTTPClient {
         return try await perform(request)
     }
 
+    func put<T: Decodable>(
+        path: String,
+        body: [String: Any],
+        requiresAuth: Bool = true,
+        headers: [String: String] = [:]
+    ) async throws -> T {
+        var request = try await buildRequest(method: "PUT", path: path, body: body, requiresAuth: requiresAuth)
+        for (name, value) in headers {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
+        return try await perform(request)
+    }
+
     func delete(path: String, requiresAuth: Bool = true) async throws {
         let request = try await buildRequest(method: "DELETE", path: path, body: nil, requiresAuth: requiresAuth)
         let _: EmptyResponse = try await perform(request)

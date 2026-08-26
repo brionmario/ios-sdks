@@ -7,7 +7,6 @@ import ThunderIDSwiftUI
 // MARK: - Profile Screen
 
 struct ProfileScreen: View {
-    @EnvironmentObject private var state: ThunderIDState
     let isDark: Bool
     let bgColor: Color
     let textColor: Color
@@ -17,139 +16,69 @@ struct ProfileScreen: View {
     let primaryBlue: Color
     let onBack: () -> Void
 
-    @State private var showEditProfile = false
-
-    /// Same precedence the SDK's `UserAvatar` uses for its seed name.
-    private var displayName: String {
-        let user = state.user
-        let givenName = user?["given_name"] as? String
-        let familyName = user?["family_name"] as? String
-        let fullName = [givenName, familyName]
-            .compactMap { $0?.isEmpty == false ? $0 : nil }
-            .joined(separator: " ")
-        if !fullName.isEmpty { return fullName }
-        return user?.displayName ?? user?.username ?? user?.email ?? "Guest"
-    }
-    private var email: String? { state.user?.email }
-    private var userId: String { state.user?.sub ?? "—" }
-
-    private struct Attribute: Identifiable {
-        let label: String
-        let value: String
-        var id: String { label }
-    }
-
-    /// Every remaining claim on the token, rendered as a label/value pair.
-    private var attributes: [Attribute] {
-        guard let user = state.user else { return [] }
-        return user.profileClaims
-            .compactMap { key, claim in
-                guard let value = Self.format(claim.value) else { return nil }
-                return Attribute(label: Self.label(for: key), value: value)
-            }
-            .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
-    }
-
-    private static func format(_ value: Any) -> String? {
-        switch value {
-        case let text as String:
-            return text.isEmpty ? nil : text
-        case let flag as Bool:
-            return flag ? "Yes" : "No"
-        case let number as Int:
-            return String(number)
-        case let number as Double:
-            return String(number)
-        case let list as [AnyCodable]:
-            let items = list.compactMap { format($0.value) }
-            return items.isEmpty ? nil : items.joined(separator: ", ")
-        default:
-            return nil
-        }
-    }
-
-    /// Humanizes a claim key for display: `given_name` -> "Given Name".
-    private static func label(for key: String) -> String {
-        let spaced = key
-            .replacingOccurrences(of: "_", with: " ")
-            .replacingOccurrences(
-                of: "([a-z0-9])([A-Z])",
-                with: "$1 $2",
-                options: .regularExpression
-            )
-        return spaced
-            .split(separator: " ")
-            .map { $0.prefix(1).uppercased() + $0.dropFirst() }
-            .joined(separator: " ")
-    }
-
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                // Back nav
-                Button(action: onBack) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("Home")
-                            .font(.system(size: 16))
+        // BaseUserProfile drives the /users/me data and edit/save state, so this
+        // screen keeps its own card design and adds inline per-field edit controls to it.
+        BaseUserProfile { profileState in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Back nav
+                    Button(action: onBack) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("Home")
+                                .font(.system(size: 16))
+                        }
+                        .foregroundColor(primaryBlue)
                     }
-                    .foregroundColor(primaryBlue)
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-
-                Text("Profile")
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundColor(textColor)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
-
-                identitySection
-
-                // Account details section
-                sectionHeader("ACCOUNT DETAILS")
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 10)
-
-                detailsCard
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 40)
-            }
-        }
-        .background(bgColor)
-        .sheet(isPresented: $showEditProfile) {
-            NavigationStack {
-                ScrollView {
-                    UserProfile {
-                        showEditProfile = false
-                    } onError: {
+                    .padding(.top, 20)
+
+                    Text("Profile")
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundColor(textColor)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 8)
+
+                    if profileState.isLoading && profileState.profile == nil {
+                        Text("Loading profile…")
+                            .font(.system(size: 13))
+                            .foregroundColor(mutedColor)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 8)
+                    } else if let error = profileState.error {
+                        Text(error)
+                            .font(.system(size: 13))
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 8)
+                    } else {
+                        identitySection(profileState)
+
+                        sectionHeader("ACCOUNT DETAILS")
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, 10)
+
+                        detailsCard(profileState)
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 40)
                     }
-                    .padding(24)
-                }
-                .navigationTitle("Edit Profile")
-                #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-                #endif
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { showEditProfile = false }
-                    }
                 }
             }
-            .presentationDetents([.large])
+            .background(bgColor)
         }
     }
 
-    private var identitySection: some View {
+    private func identitySection(_ profileState: UserProfileState) -> some View {
         VStack(spacing: 12) {
             UserAvatar(size: 56)
 
             VStack(spacing: 4) {
-                Text(displayName)
+                Text(profileState.displayName)
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(textColor)
-                if let email {
+                if let email = profileState.email {
                     Text(email)
                         .font(.system(size: 14))
                         .foregroundColor(mutedColor)
@@ -167,20 +96,17 @@ struct ProfileScreen: View {
             .foregroundColor(mutedColor)
     }
 
-    private var detailsCard: some View {
+    private func detailsCard(_ profileState: UserProfileState) -> some View {
         VStack(spacing: 0) {
-            detailRow(label: "User ID") {
-                Text(userId)
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundColor(mutedColor)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            ForEach(attributes) { attribute in
-                rowDivider
-                detailRow(label: attribute.label) {
-                    valueText(attribute.value)
-                }
+            ForEach(Array(profileState.fields.enumerated()), id: \.element.id) { index, field in
+                if index > 0 { rowDivider }
+                DetailFieldRow(
+                    field: field,
+                    profileState: profileState,
+                    textColor: textColor,
+                    mutedColor: mutedColor,
+                    primaryBlue: primaryBlue
+                )
             }
         }
         .background(cardColor)
@@ -193,21 +119,72 @@ struct ProfileScreen: View {
             .background(borderColor)
             .padding(.leading, 16)
     }
+}
 
-    private func valueText(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 13))
-            .foregroundColor(mutedColor)
-            .multilineTextAlignment(.trailing)
-    }
+/// A single row: pencil to edit, then an inline field with save/cancel.
+private struct DetailFieldRow: View {
+    let field: ProfileField
+    @ObservedObject var profileState: UserProfileState
+    let textColor: Color
+    let mutedColor: Color
+    let primaryBlue: Color
 
-    private func detailRow<C: View>(label: String, @ViewBuilder content: () -> C) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 14))
-                .foregroundColor(textColor)
-            Spacer()
-            content()
+    private var label: String { field.schema.displayName ?? field.schema.description ?? field.name }
+    private var isEditing: Bool { profileState.isEditing(field.name) }
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 14))
+                    .foregroundColor(textColor)
+                Spacer()
+                if isEditing && !field.isReadonly {
+                    HStack(spacing: 10) {
+                        TextField("", text: Binding(
+                            get: { profileState.fieldValue(field) },
+                            set: { profileState.setFieldValue(field.name, $0) }
+                        ))
+                        .font(.system(size: 13))
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 140)
+                        Button {
+                            profileState.save(field.name)
+                        } label: {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                        }
+                        Button {
+                            profileState.cancel(field.name)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(mutedColor)
+                        }
+                    }
+                } else {
+                    HStack(spacing: 6) {
+                        let text = stringifyFieldValue(field.rawValue)
+                        Text(text.isEmpty ? "-" : text)
+                            .font(.system(size: 13))
+                            .foregroundColor(mutedColor)
+                            .multilineTextAlignment(.trailing)
+                        if !field.isReadonly {
+                            Button {
+                                profileState.edit(field.name)
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(primaryBlue)
+                            }
+                        }
+                    }
+                }
+            }
+            if let error = profileState.fieldError(field.name) {
+                Text(error)
+                    .font(.system(size: 11))
+                    .foregroundColor(.red)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
