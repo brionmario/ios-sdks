@@ -52,7 +52,7 @@ final class ComponentTests: XCTestCase {
     func testDefaultStringsContainsAllExpectedKeys() {
         let requiredKeys = [
             "signIn.button", "signOut.button", "signUp.button",
-            "userProfile.title", "userProfile.save",
+            "userProfile.title", "userProfile.save", "userProfile.edit", "userProfile.cancel",
             "languageSwitcher.title",
         ]
         for key in requiredKeys {

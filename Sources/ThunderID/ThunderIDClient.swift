@@ -34,10 +34,10 @@ public final class ThunderIDClient {
         tokenRefresher = TokenRefresher(httpClient: http, tokenStore: tokenStore!)
         flowClient = FlowExecutionClient(httpClient: http)
         http.setAccessTokenProvider { [weak self] in
-            guard let self, let config = self.config, let clientId = config.clientId else {
+            guard let self, let config = self.config else {
                 throw ThunderIDError(code: .sdkNotInitialized, message: "Not initialized")
             }
-            return try await self.tokenRefresher!.getAccessToken(clientId: clientId)
+            return try await self.tokenRefresher!.getAccessToken(clientId: config.clientId)
         }
         httpClient = http
         return true
@@ -271,15 +271,24 @@ public final class ThunderIDClient {
 
     public func getUserProfile(options: [String: Any]? = nil) async throws -> UserProfile {
         try requireInitialized()
-        return try await httpClient!.get(path: "/scim2/Me")
+        return try await httpClient!.get(path: "/users/me")
     }
 
-    public func updateUserProfile(payload: [String: Any], userId: String? = nil) async throws -> User {
+    public func getUserSchema() async throws -> [String: AttributeSchema] {
         try requireInitialized()
-        let path = userId != nil ? "/scim2/Users/\(userId!)" : "/scim2/Me"
-        let updated: User = try await httpClient!.post(path: path, body: payload)
-        currentUser = updated
-        return updated
+        // The endpoint wraps the attribute map in a single "schema" key.
+        let response: [String: [String: AttributeSchema]] = try await httpClient!.get(path: "/users/me/meta")
+        return response["schema"] ?? [:]
+    }
+
+    public func updateUserProfile(payload: [String: Any]) async throws -> UserProfile {
+        try requireInitialized()
+        return try await httpClient!.put(path: "/users/me", body: ["attributes": payload])
+    }
+
+    /// Overrides the cached user, e.g. after merging in freshly-fetched `/users/me` attributes.
+    public func setCachedUser(_ user: User) {
+        currentUser = user
     }
 
     // MARK: - Flow Meta
