@@ -34,4 +34,21 @@ enum FlowComponentMerging {
         }
         return result
     }
+
+    /// Names of every `*_INPUT`-typed node in the component tree, matched the same way
+    /// `inputComponentView` binds them (`ref`, falling back to `id`). Used to seed a fresh
+    /// `fieldValues` entry for each field the component tree renders, even when the flat
+    /// `inputs` list doesn't separately list it.
+    static func inputNames(in components: [FlowComponent]) -> [String] {
+        var result: [String] = []
+        for component in components {
+            if let type = component.type, type.hasSuffix("_INPUT"), let name = component.ref ?? component.id {
+                result.append(name)
+            }
+            if let children = component.components {
+                result.append(contentsOf: inputNames(in: children))
+            }
+        }
+        return result
+    }
 }

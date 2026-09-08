@@ -115,3 +115,21 @@ jobs:
       - name: 🔨 Build Quickstart Sample
         working-directory: Samples/Quickstart
         run: swift build
+
+  e2e:
+    name: 🎭 E2E Tests
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: 🔬 Run E2E Suite
+        uses: ./.github/actions/run-e2e-suite
+        with:
+          # Fork PRs run without repository secrets, so the unauthenticated GitHub API call that
+          # resolves "latest" hits its rate limit easily. The nightly workflow already exists to
+          # catch breakage from new server releases, so pin the PR builder to a known-good
+          # version instead of resolving it live; bump this alongside the server's own releases.
+          thunderid-version: "1.0.1"

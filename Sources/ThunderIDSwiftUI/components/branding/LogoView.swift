@@ -68,7 +68,7 @@ public struct LogoView: View {
         if let image {
             image
                 .resizable()
-                .aspectRatio(contentMode: .fit)
+                .scaledToFit()
         } else {
             remoteImage(spec)
         }
@@ -79,7 +79,7 @@ public struct LogoView: View {
         if let url = URL(string: urlString), url.scheme != nil {
             AsyncImage(url: url) { phase in
                 if let image = phase.image {
-                    image.resizable().aspectRatio(contentMode: .fit)
+                    image.resizable().scaledToFit()
                 } else {
                     Color.clear
                 }
