@@ -38,15 +38,34 @@ final class LocalhostPinnedURLSession: NSObject, URLSessionDelegate, URLSessionT
             return
         }
 
+        // Anything other than loopback goes through the system's own evaluation. Accepting a
+        // trust object without evaluating it *replaces* that evaluation rather than adding to
+        // it, so doing so for an arbitrary host would silently accept a forged certificate on
+        // the channel carrying credentials, assertions and refresh tokens.
+        guard Self.isLoopbackHost(host) else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+
+        // A pinned certificate is the strongest answer when one is bundled: match it exactly.
         if let pinned = pinnedCertificateData {
             guard let certificate = SecTrustGetCertificateAtIndex(serverTrust, 0),
                   (SecCertificateCopyData(certificate) as Data) == pinned else {
                 completionHandler(.cancelAuthenticationChallenge, nil)
                 return
             }
+            completionHandler(.useCredential, URLCredential(trust: serverTrust))
+            return
         }
 
+        // No pin, but the host is loopback, which no network attacker can occupy. This is what
+        // lets a development build reach a local server through its self-signed certificate.
         completionHandler(.useCredential, URLCredential(trust: serverTrust))
+    }
+
+    /// Whether `host` is a loopback address, and therefore unreachable by a network attacker.
+    static func isLoopbackHost(_ host: String) -> Bool {
+        ["localhost", "127.0.0.1", "::1", "[::1]"].contains(host)
     }
 
     func urlSession(

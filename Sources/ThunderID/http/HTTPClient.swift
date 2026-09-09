@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Foundation
+import os
 
 /// Performs HTTP requests against the ThunderID server. Enforces HTTPS and log sanitization (spec §11.5–11.6).
 final class HTTPClient {
+    private static let logger = Logger(subsystem: "dev.thunderid.sdk", category: "HTTPClient")
     private let baseUrl: String
     private let session: URLSession
     private var accessTokenProvider: (() async throws -> String)?
@@ -170,7 +172,12 @@ private extension HTTPClient {
 
     func debugLog(_ message: String) {
         #if DEBUG
-        print("[ThunderID][HTTP] \(message)")
+        // os.Logger rather than print(): the simulator's unified log (what Maestro's CI debug
+        // artifact actually captures) never sees plain stdout from a simctl-launched process.
+        // .debug()/.info() levels aren't persisted to the log store by default, only replayed to
+        // an attached debugger, so a log pulled after the fact would never show them - .notice()
+        // (Logger's default level) is what actually survives to `log show`/`log collect`.
+        HTTPClient.logger.notice("\(message, privacy: .public)")
         #endif
     }
 }

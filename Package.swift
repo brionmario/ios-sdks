@@ -18,7 +18,10 @@ let package = Package(
     targets: [
         .target(
             name: "ThunderID",
-            path: "Sources/ThunderID"
+            path: "Sources/ThunderID",
+            swiftSettings: [
+                .define("DEBUG", .when(configuration: .debug))
+            ]
         ),
         .target(
             name: "ThunderIDSwiftUI",

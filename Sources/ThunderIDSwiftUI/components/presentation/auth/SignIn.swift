@@ -184,10 +184,37 @@ public final class SignInState: ObservableObject {
         inputs = response.data?.inputs ?? []
         components = response.data?.meta?.components ?? []
         actions = FlowComponentMerging.enrichActions(response.data?.actions ?? [], with: components)
+        seedFieldValues()
     }
 
     func setTemplateResolver(_ resolver: FlowTemplateResolver) {
         templateResolver = resolver
+    }
+
+    /// Two failure modes come from the same source — `fieldValues` only ever grows via the
+    /// binding's setter, never shrinks or gets pre-populated:
+    ///
+    /// 1. A field a user never focuses (or whose binding update races with a fast submit right
+    ///    after typing, as can happen under a loaded CI runner) never gets an entry, since the
+    ///    binding only writes on change. Submitting with that key missing — as opposed to
+    ///    present but empty — makes the server re-prompt for just that field with no action to
+    ///    submit it through, permanently stalling the flow.
+    /// 2. A field from a *previous* step lingers in `fieldValues` (it's never cleared on
+    ///    advancing), so the next step's submission carries it along unasked. The server
+    ///    interprets that leaked field as an attempt to re-satisfy the earlier step and bounces
+    ///    the flow back to it instead of processing the current one.
+    ///
+    /// Recomputing `fieldValues` from scratch on every step — keeping only values for names the
+    /// current step actually declares (from either the flat `inputs` list or the component tree;
+    /// some steps only populate one of the two), defaulting anything newly required to an empty
+    /// string — keeps a submission limited to exactly what this step asks for, never more or
+    /// less.
+    private func seedFieldValues() {
+        let currentNames = Set(inputs.map(\.name)).union(FlowComponentMerging.inputNames(in: components))
+        fieldValues = fieldValues.filter { currentNames.contains($0.key) }
+        for name in currentNames where fieldValues[name] == nil {
+            fieldValues[name] = ""
+        }
     }
 }
 
