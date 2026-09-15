@@ -36,4 +36,4 @@ jobs:
       pull-requests: write
     # Pinned to a tag once one is cut, so a change to the shared workflow reaches the four SDK
     # repositories deliberately rather than the moment it merges.
-    uses: thunder-id/.github/.github/workflows/sdk-parity-check.yml@main
+    uses: brionmario/.github/.github/workflows/sdk-parity-check.yml@sdk-parity-check
