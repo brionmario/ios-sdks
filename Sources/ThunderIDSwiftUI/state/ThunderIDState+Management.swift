@@ -137,7 +137,7 @@ public extension ThunderIDState {
     }
 }
 
-private extension ThunderIDState {
+extension ThunderIDState {
     func query<Value>(key: [String], fetch: @escaping () async throws -> Value) -> ResourceQuery<Value> {
         ResourceQuery(key: key, invalidator: invalidator, fetch: fetch)
     }
