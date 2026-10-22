@@ -10,6 +10,8 @@ final class HTTPClient {
     private let baseUrl: String
     private let session: URLSession
     private var accessTokenProvider: (() async throws -> String)?
+    private var headerProvider: (() -> [String: String])?
+    private var unauthorizedHandler: ((Data) async -> Bool)?
 
     init(baseUrl: String, session: URLSession? = nil) {
         self.baseUrl = baseUrl
@@ -18,6 +20,19 @@ final class HTTPClient {
 
     func setAccessTokenProvider(_ provider: @escaping () async throws -> String) {
         accessTokenProvider = provider
+    }
+
+    /// Replaces the access token on every request with headers of the caller's own. Set when the
+    /// tokens live on the app's backend, where the app has none to attach.
+    func setHeaderProvider(_ provider: @escaping () -> [String: String]) {
+        accessTokenProvider = nil
+        headerProvider = provider
+    }
+
+    /// Reads a `401` and says whether to send the request once more, which is how a backend's
+    /// expired session is refreshed and retried.
+    func setUnauthorizedHandler(_ handler: @escaping (Data) async -> Bool) {
+        unauthorizedHandler = handler
     }
 
     func get<T: Decodable>(path: String, requiresAuth: Bool = true) async throws -> T {
@@ -83,6 +98,9 @@ final class HTTPClient {
             let token = try await provider()
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
+        for (name, value) in headerProvider?() ?? [:] {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
         debugLogRequest(request, body: nil)
         return try await perform(request, fetcher: fetcher)
     }
@@ -110,11 +128,18 @@ final class HTTPClient {
             let token = try await provider()
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
+        for (name, value) in headerProvider?() ?? [:] {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
         debugLogRequest(request, body: body)
         return request
     }
 
-    private func perform<T: Decodable>(_ request: URLRequest, fetcher: ThunderIDFetcher? = nil) async throws -> T {
+    private func perform<T: Decodable>(
+        _ request: URLRequest,
+        fetcher: ThunderIDFetcher? = nil,
+        isRetry: Bool = false
+    ) async throws -> T {
         let (data, response): (Data, URLResponse)
         do {
             if let fetcher {
@@ -136,6 +161,9 @@ final class HTTPClient {
         }
         guard let http = response as? HTTPURLResponse else {
             throw ThunderIDError(code: .networkError, message: "Invalid response")
+        }
+        if http.statusCode == 401, !isRetry, let unauthorizedHandler, await unauthorizedHandler(data) {
+            return try await perform(request, fetcher: fetcher, isRetry: true)
         }
         return try handleResponse(http, data: data)
     }

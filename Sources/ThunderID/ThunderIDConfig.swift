@@ -127,10 +127,21 @@ public struct ThunderIDEndpoints {
     public var applications: String?
     public var users: String?
 
-    public init(agents: String? = nil, applications: String? = nil, users: String? = nil) {
+    /// The app backend's auth endpoints. Setting them hands sign-in to a backend the application
+    /// owns, which keeps the tokens, so the app holds only a session handle. See
+    /// ``ThunderIDBackendEndpoints``.
+    public var backend: ThunderIDBackendEndpoints?
+
+    public init(
+        agents: String? = nil,
+        applications: String? = nil,
+        users: String? = nil,
+        backend: ThunderIDBackendEndpoints? = nil
+    ) {
         self.agents = agents
         self.applications = applications
         self.users = users
+        self.backend = backend
     }
 }
 
