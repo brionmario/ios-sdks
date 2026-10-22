@@ -104,7 +104,10 @@ public struct BaseGroupList<Content: View>: View {
             totalResults: totalResults ?? groups.count,
             selectedId: selectedGroupId,
             onPageChange: onPageChange,
-            onSelect: onSelect
+            onSelect: onSelect,
+            search: nil,
+            searchAttributes: [],
+            onSearch: nil
         )
     }
 

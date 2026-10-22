@@ -19,6 +19,9 @@ public struct BaseUserList<Content: View>: View {
     let selectedUserId: String?
     let onPageChange: ((Int) -> Void)?
     let onSelect: ((ManagedUser) -> Void)?
+    let search: AdminSearch?
+    let searchAttributes: [AdminOption]
+    let onSearch: ((AdminSearch?) -> Void)?
     let actions: AnyView?
     let content: ((AdminListState<ManagedUser>) -> Content)?
 
@@ -34,6 +37,9 @@ public struct BaseUserList<Content: View>: View {
         selectedUserId: String? = nil,
         onPageChange: ((Int) -> Void)? = nil,
         onSelect: ((ManagedUser) -> Void)? = nil,
+        search: AdminSearch? = nil,
+        searchAttributes: [AdminOption] = [],
+        onSearch: ((AdminSearch?) -> Void)? = nil,
         actions: AnyView? = nil,
         renderContent: ((AdminListState<ManagedUser>) -> Content)?
     ) {
@@ -48,6 +54,9 @@ public struct BaseUserList<Content: View>: View {
         self.selectedUserId = selectedUserId
         self.onPageChange = onPageChange
         self.onSelect = onSelect
+        self.search = search
+        self.searchAttributes = searchAttributes
+        self.onSearch = onSearch
         self.actions = actions
         self.content = renderContent
     }
@@ -66,6 +75,9 @@ public struct BaseUserList<Content: View>: View {
         selectedUserId: String? = nil,
         onPageChange: ((Int) -> Void)? = nil,
         onSelect: ((ManagedUser) -> Void)? = nil,
+        search: AdminSearch? = nil,
+        searchAttributes: [AdminOption] = [],
+        onSearch: ((AdminSearch?) -> Void)? = nil,
         actions: AnyView? = nil,
         @ViewBuilder content: @escaping (AdminListState<ManagedUser>) -> Content
     ) {
@@ -81,6 +93,9 @@ public struct BaseUserList<Content: View>: View {
             selectedUserId: selectedUserId,
             onPageChange: onPageChange,
             onSelect: onSelect,
+            search: search,
+            searchAttributes: searchAttributes,
+            onSearch: onSearch,
             actions: actions,
             renderContent: content
         )
@@ -104,7 +119,10 @@ public struct BaseUserList<Content: View>: View {
             totalResults: totalResults ?? users.count,
             selectedId: selectedUserId,
             onPageChange: onPageChange,
-            onSelect: onSelect
+            onSelect: onSelect,
+            search: search,
+            searchAttributes: searchAttributes,
+            onSearch: onSearch
         )
     }
 
@@ -116,13 +134,23 @@ public struct BaseUserList<Content: View>: View {
             description: description,
             actions: { actions },
             content: {
+                if let onSearch, !searchAttributes.isEmpty {
+                    AdminSearchBar(
+                        i18n: i18n,
+                        identifier: "admin-user-list",
+                        attributes: searchAttributes,
+                        search: search,
+                        onSearch: onSearch
+                    )
+                }
                 AdminTable(
                     identifier: "admin-user-list",
                     rows: users,
                     rowId: \.id,
                     isLoading: isLoading,
                     error: error,
-                    emptyText: i18n.resolve("admin.users.list.empty"),
+                    emptyText: search.map { i18n.resolve("admin.common.search.no_results", ["value": $0.value]) }
+                        ?? i18n.resolve("admin.users.list.empty"),
                     selectedId: selectedUserId,
                     onSelect: onSelect,
                     pagination: onPageChange.map {
@@ -160,6 +188,9 @@ public extension BaseUserList where Content == EmptyView {
         selectedUserId: String? = nil,
         onPageChange: ((Int) -> Void)? = nil,
         onSelect: ((ManagedUser) -> Void)? = nil,
+        search: AdminSearch? = nil,
+        searchAttributes: [AdminOption] = [],
+        onSearch: ((AdminSearch?) -> Void)? = nil,
         actions: AnyView? = nil
     ) {
         self.init(
@@ -174,6 +205,9 @@ public extension BaseUserList where Content == EmptyView {
             selectedUserId: selectedUserId,
             onPageChange: onPageChange,
             onSelect: onSelect,
+            search: search,
+            searchAttributes: searchAttributes,
+            onSearch: onSearch,
             actions: actions,
             renderContent: nil
         )
@@ -191,8 +225,11 @@ public struct UserList<Content: View>: View {
     let description: String?
     let selectedUserId: String?
     let onSelect: ((ManagedUser) -> Void)?
+    let searchable: Bool
+    let searchAttributes: [AdminOption]?
     let actions: AnyView?
     @State private var offset = 0
+    @State private var search: AdminSearch?
 
     let content: ((AdminListState<ManagedUser>) -> Content)?
 
@@ -203,6 +240,8 @@ public struct UserList<Content: View>: View {
         description: String? = nil,
         selectedUserId: String? = nil,
         onSelect: ((ManagedUser) -> Void)? = nil,
+        searchable: Bool = true,
+        searchAttributes: [AdminOption]? = nil,
         actions: AnyView? = nil,
         renderContent: ((AdminListState<ManagedUser>) -> Content)?
     ) {
@@ -212,6 +251,8 @@ public struct UserList<Content: View>: View {
         self.description = description
         self.selectedUserId = selectedUserId
         self.onSelect = onSelect
+        self.searchable = searchable
+        self.searchAttributes = searchAttributes
         self.actions = actions
         self.content = renderContent
     }
@@ -224,6 +265,8 @@ public struct UserList<Content: View>: View {
         description: String? = nil,
         selectedUserId: String? = nil,
         onSelect: ((ManagedUser) -> Void)? = nil,
+        searchable: Bool = true,
+        searchAttributes: [AdminOption]? = nil,
         actions: AnyView? = nil,
         @ViewBuilder content: @escaping (AdminListState<ManagedUser>) -> Content
     ) {
@@ -234,6 +277,8 @@ public struct UserList<Content: View>: View {
             description: description,
             selectedUserId: selectedUserId,
             onSelect: onSelect,
+            searchable: searchable,
+            searchAttributes: searchAttributes,
             actions: actions,
             renderContent: content
         )
@@ -241,7 +286,9 @@ public struct UserList<Content: View>: View {
 
     public var body: some View {
         let state = thunderState
-        AdminQueryReader(state.usersQuery(limit: limit, offset: offset, filter: filter)) { query in
+        let activeFilter = filter
+            ?? search.flatMap { ManagementFilter.equality(attribute: $0.attribute, value: $0.value) }
+        AdminQueryReader(state.usersQuery(limit: limit, offset: offset, filter: activeFilter)) { query in
             BaseUserList(
                 users: query.data?.users ?? [],
                 isLoading: query.isLoading,
@@ -254,14 +301,28 @@ public struct UserList<Content: View>: View {
                 selectedUserId: selectedUserId,
                 onPageChange: { offset = $0 },
                 onSelect: onSelect,
+                search: search,
+                searchAttributes: searchAttributes ?? defaultSearchAttributes,
+                onSearch: searchable && filter == nil
+                    ? { next in
+                        search = next
+                        offset = 0
+                    }
+                    : nil,
                 actions: actions,
                 renderContent: content
             )
         }
-        .id("\(offset)|\(limit)|\(filter ?? "")")
+        .id("\(offset)|\(limit)|\(activeFilter ?? "")")
+    }
+
+    private var defaultSearchAttributes: [AdminOption] {
+        [
+            AdminOption(label: i18n.resolve("admin.users.list.search.username"), value: "username"),
+            AdminOption(label: i18n.resolve("admin.users.list.search.email"), value: "email")
+        ]
     }
 }
-
 public extension UserList where Content == EmptyView {
     init(
         filter: String? = nil,
@@ -270,6 +331,8 @@ public extension UserList where Content == EmptyView {
         description: String? = nil,
         selectedUserId: String? = nil,
         onSelect: ((ManagedUser) -> Void)? = nil,
+        searchable: Bool = true,
+        searchAttributes: [AdminOption]? = nil,
         actions: AnyView? = nil
     ) {
         self.init(
@@ -279,6 +342,8 @@ public extension UserList where Content == EmptyView {
             description: description,
             selectedUserId: selectedUserId,
             onSelect: onSelect,
+            searchable: searchable,
+            searchAttributes: searchAttributes,
             actions: actions,
             renderContent: nil
         )

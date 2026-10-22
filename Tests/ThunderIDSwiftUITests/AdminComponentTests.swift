@@ -251,4 +251,62 @@ final class AdminComponentTests: XCTestCase {
         state.submit()
         XCTAssertTrue(submissions.isEmpty)
     }
+
+    // MARK: - Search and filters
+
+    func testEqualityFilterTrimsAndRejectsInvalidInput() {
+        XCTAssertEqual(ManagementFilter.equality(attribute: "username", value: "  ada "), #"username eq "ada""#)
+        XCTAssertEqual(ManagementFilter.equality(attribute: "name", value: #"Say "hi""#), #"name eq "Say hi""#)
+        XCTAssertNil(ManagementFilter.equality(attribute: "username", value: "   "))
+        XCTAssertNil(ManagementFilter.equality(attribute: "user name", value: "ada"))
+    }
+
+    func testListContentReceivesTheSearch() throws {
+        let captured = Captured<AdminListState<ManagedUser>>()
+        let search = AdminSearch(attribute: "email", value: "ada@example.com")
+
+        render(
+            BaseUserList(
+                users: [],
+                search: search,
+                searchAttributes: [AdminOption(label: "Email", value: "email")],
+                onSearch: { _ in }
+            ) { state in
+                let _ = (captured.value = state)
+                Text("\(state.rows.count)")
+            }
+        )
+
+        let state = try XCTUnwrap(captured.value)
+        XCTAssertEqual(state.search, search)
+        XCTAssertEqual(state.searchAttributes.map(\.value), ["email"])
+        XCTAssertNotNil(state.onSearch)
+    }
+
+    func testDefaultListsRenderWithSearchAndTypeFilter() {
+        render(
+            BaseUserList(
+                users: [],
+                search: AdminSearch(attribute: "username", value: "nobody"),
+                searchAttributes: [AdminOption(label: "Username", value: "username")],
+                onSearch: { _ in }
+            )
+        )
+        render(BaseRoleAssignments(assignments: [], typeFilter: .group, onTypeFilterChange: { _ in }))
+    }
+
+    func testRoleAssignmentsContentReceivesTheTypeFilter() throws {
+        let captured = Captured<RoleAssignmentsState>()
+
+        render(
+            BaseRoleAssignments(assignments: [], typeFilter: .agent, onTypeFilterChange: { _ in }) { state in
+                let _ = (captured.value = state)
+                Text("\(state.assignments.count)")
+            }
+        )
+
+        let state = try XCTUnwrap(captured.value)
+        XCTAssertEqual(state.typeFilter, .agent)
+        XCTAssertNotNil(state.onTypeFilterChange)
+    }
 }

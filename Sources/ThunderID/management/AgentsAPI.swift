@@ -11,12 +11,19 @@ public struct AgentsAPI {
     let typesTransport: ManagementTransport
 
     /// Returns a page of agents.
-    public func list(limit: Int? = nil, offset: Int? = nil, fetcher: ThunderIDFetcher? = nil) async throws
-        -> AgentListResponse {
+    /// - Parameter filter: A server-side filter on a custom agent attribute, such as `name eq "Calendar Agent"`.
+    ///   ``ManagementFilter/equality(attribute:value:)`` builds one.
+    public func list(
+        limit: Int? = nil,
+        offset: Int? = nil,
+        filter: String? = nil,
+        fetcher: ThunderIDFetcher? = nil
+    ) async throws -> AgentListResponse {
         try await transport.list(
             query: .management([
                 ("limit", limit.map(String.init)),
                 ("offset", offset.map(String.init)),
+                ("filter", filter),
                 ("include", "display")
             ]),
             fetcher: fetcher

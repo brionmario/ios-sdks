@@ -4,6 +4,17 @@
 import SwiftUI
 import ThunderID
 
+/// A search an admin list applies on the server: the attribute to match and the value it must equal.
+public struct AdminSearch: Equatable {
+    public let attribute: String
+    public let value: String
+
+    public init(attribute: String, value: String) {
+        self.attribute = attribute
+        self.value = value
+    }
+}
+
 /// What an admin list hands its `content` closure, so the rows can be shown with any UI.
 public struct AdminListState<Row> {
     public let rows: [Row]
@@ -19,6 +30,12 @@ public struct AdminListState<Row> {
     public let onPageChange: ((Int) -> Void)?
     /// Chooses a row. `nil` when rows are not selectable.
     public let onSelect: ((Row) -> Void)?
+    /// The search currently applied, if any.
+    public let search: AdminSearch?
+    /// The attributes that can be searched, with translated labels.
+    public let searchAttributes: [AdminOption]
+    /// Applies a search on the server, or clears it with `nil`. `nil` when the list cannot be searched.
+    public let onSearch: ((AdminSearch?) -> Void)?
 }
 
 /// What ``BaseGroupCreate`` and ``BaseRoleCreate`` hand their `content` closure.
@@ -126,6 +143,11 @@ public struct RoleAssignmentsState {
     public let onAssign: ((RoleAssignmentInput) -> Void)?
     /// Removes an assignment. `nil` when unassigning is not allowed.
     public let onUnassign: ((RoleAssignment) -> Void)?
+    /// The assignee type the list is narrowed to, or `nil` for every type.
+    public let typeFilter: RoleAssigneeType?
+    /// Narrows the list to one assignee type on the server, or back to every type with `nil`.
+    /// `nil` when the list cannot be filtered.
+    public let onTypeFilterChange: ((RoleAssigneeType?) -> Void)?
 }
 
 /// What ``BaseRolePermissions`` hands its `content` closure.

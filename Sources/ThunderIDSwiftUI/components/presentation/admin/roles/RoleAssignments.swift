@@ -18,6 +18,8 @@ public struct BaseRoleAssignments<Content: View>: View {
     let description: String?
     let onAssign: ((RoleAssignmentInput) -> Void)?
     let onUnassign: ((RoleAssignment) -> Void)?
+    let typeFilter: RoleAssigneeType?
+    let onTypeFilterChange: ((RoleAssigneeType?) -> Void)?
     let content: ((RoleAssignmentsState) -> Content)?
 
     init(
@@ -30,6 +32,8 @@ public struct BaseRoleAssignments<Content: View>: View {
         description: String? = nil,
         onAssign: ((RoleAssignmentInput) -> Void)? = nil,
         onUnassign: ((RoleAssignment) -> Void)? = nil,
+        typeFilter: RoleAssigneeType? = nil,
+        onTypeFilterChange: ((RoleAssigneeType?) -> Void)? = nil,
         renderContent: ((RoleAssignmentsState) -> Content)?
     ) {
         self.assignments = assignments
@@ -41,6 +45,8 @@ public struct BaseRoleAssignments<Content: View>: View {
         self.description = description
         self.onAssign = onAssign
         self.onUnassign = onUnassign
+        self.typeFilter = typeFilter
+        self.onTypeFilterChange = onTypeFilterChange
         self.content = renderContent
     }
 
@@ -56,6 +62,8 @@ public struct BaseRoleAssignments<Content: View>: View {
         description: String? = nil,
         onAssign: ((RoleAssignmentInput) -> Void)? = nil,
         onUnassign: ((RoleAssignment) -> Void)? = nil,
+        typeFilter: RoleAssigneeType? = nil,
+        onTypeFilterChange: ((RoleAssigneeType?) -> Void)? = nil,
         @ViewBuilder content: @escaping (RoleAssignmentsState) -> Content
     ) {
         self.init(
@@ -68,6 +76,8 @@ public struct BaseRoleAssignments<Content: View>: View {
             description: description,
             onAssign: onAssign,
             onUnassign: onUnassign,
+            typeFilter: typeFilter,
+            onTypeFilterChange: onTypeFilterChange,
             renderContent: content
         )
     }
@@ -88,7 +98,9 @@ public struct BaseRoleAssignments<Content: View>: View {
             error: error,
             isMutating: isMutating,
             onAssign: candidates == nil ? nil : onAssign,
-            onUnassign: onUnassign
+            onUnassign: onUnassign,
+            typeFilter: typeFilter,
+            onTypeFilterChange: onTypeFilterChange
         )
     }
 
@@ -113,7 +125,24 @@ public struct BaseRoleAssignments<Content: View>: View {
                 { identity in
                     unassign(RoleAssignment(id: identity.id, type: identity.type, display: identity.display))
                 }
-            }
+            },
+            toolbar: onTypeFilterChange.map { change in AnyView(typePicker(change)) }
+        )
+    }
+
+    private func typePicker(_ change: @escaping (RoleAssigneeType?) -> Void) -> some View {
+        let types: [RoleAssigneeType] = [.user, .group, .agent, .app]
+        return AdminPicker(
+            label: i18n.resolve("admin.common.filters.type"),
+            name: "assignee-type",
+            options: [AdminOption(label: i18n.resolve("admin.common.filters.all_types"), value: "")]
+                + types.map {
+                    AdminOption(label: i18n.resolve("admin.common.identity_types.\($0.rawValue)"), value: $0.rawValue)
+                },
+            selection: Binding(
+                get: { typeFilter?.rawValue ?? "" },
+                set: { change(RoleAssigneeType(rawValue: $0)) }
+            )
         )
     }
 }
@@ -128,7 +157,9 @@ public extension BaseRoleAssignments where Content == EmptyView {
         title: String? = nil,
         description: String? = nil,
         onAssign: ((RoleAssignmentInput) -> Void)? = nil,
-        onUnassign: ((RoleAssignment) -> Void)? = nil
+        onUnassign: ((RoleAssignment) -> Void)? = nil,
+        typeFilter: RoleAssigneeType? = nil,
+        onTypeFilterChange: ((RoleAssigneeType?) -> Void)? = nil
     ) {
         self.init(
             assignments: assignments,
@@ -140,6 +171,8 @@ public extension BaseRoleAssignments where Content == EmptyView {
             description: description,
             onAssign: onAssign,
             onUnassign: onUnassign,
+            typeFilter: typeFilter,
+            onTypeFilterChange: onTypeFilterChange,
             renderContent: nil
         )
     }
@@ -152,19 +185,23 @@ public struct RoleAssignments<Content: View>: View {
     @EnvironmentObject private var thunderState: ThunderIDState
     let roleId: String
     let editable: Bool
+    let filterable: Bool
     let title: String?
     let description: String?
     let content: ((RoleAssignmentsState) -> Content)?
+    @State private var typeFilter: RoleAssigneeType?
 
     init(
         roleId: String,
         editable: Bool = false,
+        filterable: Bool = true,
         title: String? = nil,
         description: String? = nil,
         renderContent: ((RoleAssignmentsState) -> Content)?
     ) {
         self.roleId = roleId
         self.editable = editable
+        self.filterable = filterable
         self.title = title
         self.description = description
         self.content = renderContent
@@ -174,6 +211,7 @@ public struct RoleAssignments<Content: View>: View {
     public init(
         roleId: String,
         editable: Bool = false,
+        filterable: Bool = true,
         title: String? = nil,
         description: String? = nil,
         @ViewBuilder content: @escaping (RoleAssignmentsState) -> Content
@@ -181,6 +219,7 @@ public struct RoleAssignments<Content: View>: View {
         self.init(
             roleId: roleId,
             editable: editable,
+            filterable: filterable,
             title: title,
             description: description,
             renderContent: content
@@ -188,7 +227,13 @@ public struct RoleAssignments<Content: View>: View {
     }
 
     public var body: some View {
-        RoleAssignmentsHost(state: thunderState, props: self).id("\(roleId)|\(editable)")
+        RoleAssignmentsHost(
+            state: thunderState,
+            props: self,
+            typeFilter: typeFilter,
+            onTypeFilterChange: filterable ? { typeFilter = $0 } : nil
+        )
+        .id("\(roleId)|\(editable)|\(typeFilter?.rawValue ?? "")")
     }
 }
 
@@ -196,12 +241,14 @@ public extension RoleAssignments where Content == EmptyView {
     init(
         roleId: String,
         editable: Bool = false,
+        filterable: Bool = true,
         title: String? = nil,
         description: String? = nil
     ) {
         self.init(
             roleId: roleId,
             editable: editable,
+            filterable: filterable,
             title: title,
             description: description,
             renderContent: nil
@@ -218,15 +265,26 @@ private struct RoleAssignmentsHost<Content: View>: View {
     @StateObject private var assign: ResourceMutation<RoleAssignmentsInput, Void>
     @StateObject private var unassign: ResourceMutation<RoleAssignmentsInput, Void>
     let props: RoleAssignments<Content>
+    let typeFilter: RoleAssigneeType?
+    let onTypeFilterChange: ((RoleAssigneeType?) -> Void)?
 
-    init(state: ThunderIDState, props: RoleAssignments<Content>) {
-        _assignments = StateObject(wrappedValue: state.roleAssignmentsQuery(roleId: props.roleId, limit: 100))
+    init(
+        state: ThunderIDState,
+        props: RoleAssignments<Content>,
+        typeFilter: RoleAssigneeType?,
+        onTypeFilterChange: ((RoleAssigneeType?) -> Void)?
+    ) {
+        _assignments = StateObject(
+            wrappedValue: state.roleAssignmentsQuery(roleId: props.roleId, type: typeFilter, limit: 100)
+        )
         _users = StateObject(wrappedValue: state.usersQuery(limit: 100))
         _groups = StateObject(wrappedValue: state.groupsQuery(limit: 100))
         _agents = StateObject(wrappedValue: state.agentsQuery(limit: 100))
         _assign = StateObject(wrappedValue: state.addRoleAssignmentsMutation())
         _unassign = StateObject(wrappedValue: state.removeRoleAssignmentsMutation())
         self.props = props
+        self.typeFilter = typeFilter
+        self.onTypeFilterChange = onTypeFilterChange
     }
 
     var body: some View {
@@ -244,6 +302,8 @@ private struct RoleAssignmentsHost<Content: View>: View {
             description: props.description,
             onAssign: props.editable ? addAssignment : nil,
             onUnassign: props.editable ? removeAssignment : nil,
+            typeFilter: typeFilter,
+            onTypeFilterChange: onTypeFilterChange,
             renderContent: props.content
         )
         .task {

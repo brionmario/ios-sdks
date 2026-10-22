@@ -30,9 +30,14 @@ struct AdminIdentityTable<IdentityType: RawRepresentable & Hashable>: View where
     let isMutating: Bool
     let onAdd: ((String, IdentityType) -> Void)?
     let onRemove: ((AdminRelatedIdentity<IdentityType>) -> Void)?
+    /// Controls shown above the picker and table, such as a filter.
+    var toolbar: AnyView?
 
     var body: some View {
         AdminSection(identifier: identifier, title: title, description: description) {
+            if let toolbar {
+                toolbar
+            }
             if let onAdd, let candidates {
                 IdentityPicker(
                     i18n: i18n,

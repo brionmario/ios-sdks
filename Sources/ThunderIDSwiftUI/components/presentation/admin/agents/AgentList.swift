@@ -19,6 +19,9 @@ public struct BaseAgentList<Content: View>: View {
     let selectedAgentId: String?
     let onPageChange: ((Int) -> Void)?
     let onSelect: ((BasicAgent) -> Void)?
+    let search: AdminSearch?
+    let searchAttributes: [AdminOption]
+    let onSearch: ((AdminSearch?) -> Void)?
     let actions: AnyView?
     let content: ((AdminListState<BasicAgent>) -> Content)?
 
@@ -34,6 +37,9 @@ public struct BaseAgentList<Content: View>: View {
         selectedAgentId: String? = nil,
         onPageChange: ((Int) -> Void)? = nil,
         onSelect: ((BasicAgent) -> Void)? = nil,
+        search: AdminSearch? = nil,
+        searchAttributes: [AdminOption] = [],
+        onSearch: ((AdminSearch?) -> Void)? = nil,
         actions: AnyView? = nil,
         renderContent: ((AdminListState<BasicAgent>) -> Content)?
     ) {
@@ -48,6 +54,9 @@ public struct BaseAgentList<Content: View>: View {
         self.selectedAgentId = selectedAgentId
         self.onPageChange = onPageChange
         self.onSelect = onSelect
+        self.search = search
+        self.searchAttributes = searchAttributes
+        self.onSearch = onSearch
         self.actions = actions
         self.content = renderContent
     }
@@ -66,6 +75,9 @@ public struct BaseAgentList<Content: View>: View {
         selectedAgentId: String? = nil,
         onPageChange: ((Int) -> Void)? = nil,
         onSelect: ((BasicAgent) -> Void)? = nil,
+        search: AdminSearch? = nil,
+        searchAttributes: [AdminOption] = [],
+        onSearch: ((AdminSearch?) -> Void)? = nil,
         actions: AnyView? = nil,
         @ViewBuilder content: @escaping (AdminListState<BasicAgent>) -> Content
     ) {
@@ -81,6 +93,9 @@ public struct BaseAgentList<Content: View>: View {
             selectedAgentId: selectedAgentId,
             onPageChange: onPageChange,
             onSelect: onSelect,
+            search: search,
+            searchAttributes: searchAttributes,
+            onSearch: onSearch,
             actions: actions,
             renderContent: content
         )
@@ -104,7 +119,10 @@ public struct BaseAgentList<Content: View>: View {
             totalResults: totalResults ?? agents.count,
             selectedId: selectedAgentId,
             onPageChange: onPageChange,
-            onSelect: onSelect
+            onSelect: onSelect,
+            search: search,
+            searchAttributes: searchAttributes,
+            onSearch: onSearch
         )
     }
 
@@ -116,13 +134,23 @@ public struct BaseAgentList<Content: View>: View {
             description: description,
             actions: { actions },
             content: {
+                if let onSearch, !searchAttributes.isEmpty {
+                    AdminSearchBar(
+                        i18n: i18n,
+                        identifier: "admin-agent-list",
+                        attributes: searchAttributes,
+                        search: search,
+                        onSearch: onSearch
+                    )
+                }
                 AdminTable(
                     identifier: "admin-agent-list",
                     rows: agents,
                     rowId: \.id,
                     isLoading: isLoading,
                     error: error,
-                    emptyText: i18n.resolve("admin.agents.list.empty"),
+                    emptyText: search.map { i18n.resolve("admin.common.search.no_results", ["value": $0.value]) }
+                        ?? i18n.resolve("admin.agents.list.empty"),
                     selectedId: selectedAgentId,
                     onSelect: onSelect,
                     pagination: onPageChange.map {
@@ -160,6 +188,9 @@ public extension BaseAgentList where Content == EmptyView {
         selectedAgentId: String? = nil,
         onPageChange: ((Int) -> Void)? = nil,
         onSelect: ((BasicAgent) -> Void)? = nil,
+        search: AdminSearch? = nil,
+        searchAttributes: [AdminOption] = [],
+        onSearch: ((AdminSearch?) -> Void)? = nil,
         actions: AnyView? = nil
     ) {
         self.init(
@@ -174,6 +205,9 @@ public extension BaseAgentList where Content == EmptyView {
             selectedAgentId: selectedAgentId,
             onPageChange: onPageChange,
             onSelect: onSelect,
+            search: search,
+            searchAttributes: searchAttributes,
+            onSearch: onSearch,
             actions: actions,
             renderContent: nil
         )
@@ -190,8 +224,11 @@ public struct AgentList<Content: View>: View {
     let description: String?
     let selectedAgentId: String?
     let onSelect: ((BasicAgent) -> Void)?
+    let searchable: Bool
+    let searchAttributes: [AdminOption]?
     let actions: AnyView?
     @State private var offset = 0
+    @State private var search: AdminSearch?
 
     let content: ((AdminListState<BasicAgent>) -> Content)?
 
@@ -201,6 +238,8 @@ public struct AgentList<Content: View>: View {
         description: String? = nil,
         selectedAgentId: String? = nil,
         onSelect: ((BasicAgent) -> Void)? = nil,
+        searchable: Bool = true,
+        searchAttributes: [AdminOption]? = nil,
         actions: AnyView? = nil,
         renderContent: ((AdminListState<BasicAgent>) -> Content)?
     ) {
@@ -209,6 +248,8 @@ public struct AgentList<Content: View>: View {
         self.description = description
         self.selectedAgentId = selectedAgentId
         self.onSelect = onSelect
+        self.searchable = searchable
+        self.searchAttributes = searchAttributes
         self.actions = actions
         self.content = renderContent
     }
@@ -220,6 +261,8 @@ public struct AgentList<Content: View>: View {
         description: String? = nil,
         selectedAgentId: String? = nil,
         onSelect: ((BasicAgent) -> Void)? = nil,
+        searchable: Bool = true,
+        searchAttributes: [AdminOption]? = nil,
         actions: AnyView? = nil,
         @ViewBuilder content: @escaping (AdminListState<BasicAgent>) -> Content
     ) {
@@ -229,6 +272,8 @@ public struct AgentList<Content: View>: View {
             description: description,
             selectedAgentId: selectedAgentId,
             onSelect: onSelect,
+            searchable: searchable,
+            searchAttributes: searchAttributes,
             actions: actions,
             renderContent: content
         )
@@ -236,7 +281,10 @@ public struct AgentList<Content: View>: View {
 
     public var body: some View {
         let state = thunderState
-        AdminQueryReader(state.agentsQuery(limit: limit, offset: offset)) { query in
+        let activeFilter = search.flatMap {
+            ManagementFilter.equality(attribute: $0.attribute, value: $0.value)
+        }
+        AdminQueryReader(state.agentsQuery(limit: limit, offset: offset, filter: activeFilter)) { query in
             BaseAgentList(
                 agents: query.data?.agents ?? [],
                 isLoading: query.isLoading,
@@ -249,14 +297,25 @@ public struct AgentList<Content: View>: View {
                 selectedAgentId: selectedAgentId,
                 onPageChange: { offset = $0 },
                 onSelect: onSelect,
+                search: search,
+                searchAttributes: searchAttributes ?? defaultSearchAttributes,
+                onSearch: searchable
+                    ? { next in
+                        search = next
+                        offset = 0
+                    }
+                    : nil,
                 actions: actions,
                 renderContent: content
             )
         }
-        .id("\(offset)|\(limit)")
+        .id("\(offset)|\(limit)|\(activeFilter ?? "")")
+    }
+
+    private var defaultSearchAttributes: [AdminOption] {
+        [AdminOption(label: i18n.resolve("admin.agents.list.search.name"), value: "name")]
     }
 }
-
 public extension AgentList where Content == EmptyView {
     init(
         limit: Int = 20,
@@ -264,6 +323,8 @@ public extension AgentList where Content == EmptyView {
         description: String? = nil,
         selectedAgentId: String? = nil,
         onSelect: ((BasicAgent) -> Void)? = nil,
+        searchable: Bool = true,
+        searchAttributes: [AdminOption]? = nil,
         actions: AnyView? = nil
     ) {
         self.init(
@@ -272,6 +333,8 @@ public extension AgentList where Content == EmptyView {
             description: description,
             selectedAgentId: selectedAgentId,
             onSelect: onSelect,
+            searchable: searchable,
+            searchAttributes: searchAttributes,
             actions: actions,
             renderContent: nil
         )

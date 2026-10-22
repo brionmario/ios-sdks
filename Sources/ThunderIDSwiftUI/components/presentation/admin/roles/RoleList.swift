@@ -104,7 +104,10 @@ public struct BaseRoleList<Content: View>: View {
             totalResults: totalResults ?? roles.count,
             selectedId: selectedRoleId,
             onPageChange: onPageChange,
-            onSelect: onSelect
+            onSelect: onSelect,
+            search: nil,
+            searchAttributes: [],
+            onSearch: nil
         )
     }
 
