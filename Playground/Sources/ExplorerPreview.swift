@@ -14,6 +14,8 @@ struct ComponentPreview: View {
     var body: some View {
         if spec.group.hasPrefix("Admin") {
             AdminPreview(id: spec.id, values: values, onEvent: onEvent)
+        } else if spec.group == "Custom rendering" {
+            CustomRenderPreview(id: spec.id, values: values, onEvent: onEvent)
         } else {
             standardPreview
         }

@@ -124,6 +124,15 @@ The playground is also a Swift package, which is how CI type-checks it against t
 swift build
 ```
 
+## Custom rendering
+
+Every admin view, `Base*` and connected, takes an optional `content` closure, the same pattern as `BaseSignIn`, and
+renders it in place of its own UI. The closure gets the view's state: `AdminListState` (rows, paging and selection),
+`NamedResourceFormState` and the other form states (bindings and `submit`), or the details states (the record and its
+actions). The Components tab's **Custom rendering** group draws `UserList` as custom rows with a pager,
+`GroupCreate` as plain SwiftUI fields bound to the state, and `UserDetails` as a profile card. Open one directly with
+`-component customUserList` (or `customGroupCreate`, `customUserDetails`).
+
 ## Notes
 
 - The SDK has no event emitter, so the log is recorded around each SDK call, from the storage
