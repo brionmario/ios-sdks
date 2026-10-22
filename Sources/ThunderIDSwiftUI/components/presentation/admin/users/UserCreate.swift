@@ -41,7 +41,7 @@ public struct UserCreateSubmission: Equatable {
 }
 
 /// A form for creating a user, rendered from the user types it is given.
-public struct BaseUserCreate: View {
+public struct BaseUserCreate<Content: View>: View {
     @EnvironmentObject private var i18n: ThunderIDI18n
     let userTypes: [AdminOption]
     let fields: [UserCreateField]
@@ -55,7 +55,9 @@ public struct BaseUserCreate: View {
     @State private var chosenType = ""
     @State private var values: [String: String] = [:]
 
-    public init(
+    let content: ((UserCreateFormState) -> Content)?
+
+    init(
         userTypes: [AdminOption],
         fields: [UserCreateField] = UserCreateField.defaults,
         error: String? = nil,
@@ -63,7 +65,8 @@ public struct BaseUserCreate: View {
         title: String? = nil,
         description: String? = nil,
         onCancel: (() -> Void)? = nil,
-        onSubmit: @escaping (UserCreateSubmission) -> Void
+        onSubmit: @escaping (UserCreateSubmission) -> Void,
+        renderContent: ((UserCreateFormState) -> Content)?
     ) {
         self.userTypes = userTypes
         self.fields = fields
@@ -73,6 +76,33 @@ public struct BaseUserCreate: View {
         self.description = description
         self.onCancel = onCancel
         self.onSubmit = onSubmit
+        self.content = renderContent
+    }
+
+    /// - Parameter content: Renders custom UI in place of the default form, from the user types, the fields,
+    ///   bindings to the type and each attribute, the submit action and the submission state.
+    public init(
+        userTypes: [AdminOption],
+        fields: [UserCreateField] = UserCreateField.defaults,
+        error: String? = nil,
+        isSubmitting: Bool = false,
+        title: String? = nil,
+        description: String? = nil,
+        onCancel: (() -> Void)? = nil,
+        onSubmit: @escaping (UserCreateSubmission) -> Void,
+        @ViewBuilder content: @escaping (UserCreateFormState) -> Content
+    ) {
+        self.init(
+            userTypes: userTypes,
+            fields: fields,
+            error: error,
+            isSubmitting: isSubmitting,
+            title: title,
+            description: description,
+            onCancel: onCancel,
+            onSubmit: onSubmit,
+            renderContent: content
+        )
     }
 
     private var type: String { chosenType.isEmpty ? (userTypes.first?.value ?? "") : chosenType }
@@ -82,6 +112,30 @@ public struct BaseUserCreate: View {
     }
 
     public var body: some View {
+        if let content {
+            content(renderState)
+        } else {
+            defaultBody
+        }
+    }
+
+    private var renderState: UserCreateFormState {
+        UserCreateFormState(
+            userTypes: userTypes,
+            fields: fields,
+            type: Binding(get: { type }, set: { chosenType = $0 }),
+            values: values,
+            isValid: isComplete,
+            isSubmitting: isSubmitting,
+            error: error,
+            bindingFor: { name in Binding(get: { values[name] ?? "" }, set: { values[name] = $0 }) },
+            submit: submit,
+            onCancel: onCancel
+        )
+    }
+
+    @ViewBuilder
+    private var defaultBody: some View {
         AdminSection(
             identifier: "admin-user-create",
             title: title ?? i18n.resolve("admin.users.create.title"),
@@ -123,14 +177,40 @@ public struct BaseUserCreate: View {
     }
 
     private func submit() {
+        guard isComplete, !isSubmitting else { return }
         let attributes = values.filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         onSubmit(UserCreateSubmission(type: type, attributes: attributes))
     }
 }
 
+public extension BaseUserCreate where Content == EmptyView {
+    init(
+        userTypes: [AdminOption],
+        fields: [UserCreateField] = UserCreateField.defaults,
+        error: String? = nil,
+        isSubmitting: Bool = false,
+        title: String? = nil,
+        description: String? = nil,
+        onCancel: (() -> Void)? = nil,
+        onSubmit: @escaping (UserCreateSubmission) -> Void
+    ) {
+        self.init(
+            userTypes: userTypes,
+            fields: fields,
+            error: error,
+            isSubmitting: isSubmitting,
+            title: title,
+            description: description,
+            onCancel: onCancel,
+            onSubmit: onSubmit,
+            renderContent: nil
+        )
+    }
+}
+
 /// Creates a user through the management API. New users go into `ouId`, or the signed-in user's
 /// own organization unit when it is not given.
-public struct UserCreate: View {
+public struct UserCreate<Content: View>: View {
     @EnvironmentObject private var thunderState: ThunderIDState
     let ouId: String?
     let fields: [UserCreateField]
@@ -138,14 +218,16 @@ public struct UserCreate: View {
     let description: String?
     let onCancel: (() -> Void)?
     let onCreated: ((ManagedUser) -> Void)?
+    let content: ((UserCreateFormState) -> Content)?
 
-    public init(
+    init(
         ouId: String? = nil,
         fields: [UserCreateField] = UserCreateField.defaults,
         title: String? = nil,
         description: String? = nil,
         onCancel: (() -> Void)? = nil,
-        onCreated: ((ManagedUser) -> Void)? = nil
+        onCreated: ((ManagedUser) -> Void)? = nil,
+        renderContent: ((UserCreateFormState) -> Content)?
     ) {
         self.ouId = ouId
         self.fields = fields
@@ -153,6 +235,28 @@ public struct UserCreate: View {
         self.description = description
         self.onCancel = onCancel
         self.onCreated = onCreated
+        self.content = renderContent
+    }
+
+    /// - Parameter content: Renders custom UI in place of the default form. See ``BaseUserCreate``.
+    public init(
+        ouId: String? = nil,
+        fields: [UserCreateField] = UserCreateField.defaults,
+        title: String? = nil,
+        description: String? = nil,
+        onCancel: (() -> Void)? = nil,
+        onCreated: ((ManagedUser) -> Void)? = nil,
+        @ViewBuilder content: @escaping (UserCreateFormState) -> Content
+    ) {
+        self.init(
+            ouId: ouId,
+            fields: fields,
+            title: title,
+            description: description,
+            onCancel: onCancel,
+            onCreated: onCreated,
+            renderContent: content
+        )
     }
 
     public var body: some View {
@@ -168,17 +272,40 @@ public struct UserCreate: View {
                     isSubmitting: host.isSubmitting,
                     title: title,
                     description: description,
-                    onCancel: onCancel
-                ) { submission in
-                    host.submit { ouId in
-                        CreateManagedUserRequest(
-                            ouId: ouId,
-                            type: submission.type,
-                            attributes: submission.attributes.mapValues { AnyCodable($0) }
-                        )
-                    } onCreated: { onCreated?($0) }
-                }
+                    onCancel: onCancel,
+                    onSubmit: { submission in
+                        host.submit { ouId in
+                            CreateManagedUserRequest(
+                                ouId: ouId,
+                                type: submission.type,
+                                attributes: submission.attributes.mapValues { AnyCodable($0) }
+                            )
+                        } onCreated: { onCreated?($0) }
+                    },
+                    renderContent: content
+                )
             }
         }
+    }
+}
+
+public extension UserCreate where Content == EmptyView {
+    init(
+        ouId: String? = nil,
+        fields: [UserCreateField] = UserCreateField.defaults,
+        title: String? = nil,
+        description: String? = nil,
+        onCancel: (() -> Void)? = nil,
+        onCreated: ((ManagedUser) -> Void)? = nil
+    ) {
+        self.init(
+            ouId: ouId,
+            fields: fields,
+            title: title,
+            description: description,
+            onCancel: onCancel,
+            onCreated: onCreated,
+            renderContent: nil
+        )
     }
 }

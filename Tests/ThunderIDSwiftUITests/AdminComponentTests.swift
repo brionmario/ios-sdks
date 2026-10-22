@@ -141,4 +141,114 @@ final class AdminComponentTests: XCTestCase {
             XCTAssertNotNil(renderer.cgImage)
         }
     }
+
+    // MARK: - Content closures
+
+    private final class Captured<Value> {
+        var value: Value?
+    }
+
+    private func render(_ view: some View) {
+        let state = ThunderIDState(client: ThunderIDClient(), i18n: i18n)
+        let renderer = ImageRenderer(
+            content: view
+                .environmentObject(i18n)
+                .environmentObject(state)
+                .frame(width: 400)
+        )
+        XCTAssertNotNil(renderer.cgImage)
+    }
+
+    func testListContentReceivesRowsAndPagination() throws {
+        let user: ManagedUser = try decode(#"{"id":"u-1","ouId":"ou","type":"customer","display":"Alice"}"#)
+        let captured = Captured<AdminListState<ManagedUser>>()
+
+        render(
+            BaseUserList(users: [user], limit: 20, offset: 20, totalResults: 45, onPageChange: { _ in }) { state in
+                let _ = (captured.value = state)
+                Text(state.rows.map(\.id).joined())
+            }
+        )
+
+        let state = try XCTUnwrap(captured.value)
+        XCTAssertEqual(state.rows.map(\.id), ["u-1"])
+        XCTAssertEqual(state.totalResults, 45)
+        XCTAssertEqual(state.offset, 20)
+        XCTAssertNotNil(state.onPageChange)
+        XCTAssertNil(state.onSelect)
+    }
+
+    func testDetailsContentHidesCredentialsAndReadOnlyActions() throws {
+        let user: ManagedUser = try decode(
+            #"{"id":"u-1","ouId":"ou","type":"customer","display":"Alice","isReadOnly":true,"# +
+            #""attributes":{"username":"alice","password":"secret"}}"#
+        )
+        let captured = Captured<UserDetailsState>()
+
+        render(
+            BaseUserDetails(user: user, onDelete: {}, onUpdate: { _ in }) { state in
+                let _ = (captured.value = state)
+                Text(state.displayName)
+            }
+        )
+
+        let state = try XCTUnwrap(captured.value)
+        XCTAssertEqual(state.displayName, "Alice")
+        XCTAssertEqual(Array(state.attributes.keys), ["username"])
+        XCTAssertNil(state.onDelete)
+        XCTAssertNil(state.onUpdate)
+    }
+
+    func testMembersAndPermissionsContentGetTheirData() throws {
+        let members = Captured<GroupMembersState>()
+        let permissions = Captured<RolePermissionsState>()
+
+        render(
+            BaseGroupMembers(
+                members: [GroupMember(id: "u-1", type: .user, display: "Alice")],
+                onAdd: { _ in },
+                onRemove: { _ in }
+            ) { state in
+                let _ = (members.value = state)
+                Text("\(state.members.count)")
+            }
+        )
+        render(
+            BaseRolePermissions(
+                permissions: [
+                    RoleResourcePermissions(resourceServerId: "rs-1", permissions: ["read"]),
+                    RoleResourcePermissions(resourceServerId: "rs-2", permissions: [])
+                ],
+                resourceServerNames: ["rs-1": "Orders API"]
+            ) { state in
+                let _ = (permissions.value = state)
+                Text("\(state.permissions.count)")
+            }
+        )
+
+        let membersState = try XCTUnwrap(members.value)
+        XCTAssertNil(membersState.onAdd, "Adding needs candidates as well as onAdd")
+        XCTAssertNotNil(membersState.onRemove)
+        let permissionsState = try XCTUnwrap(permissions.value)
+        XCTAssertEqual(permissionsState.permissions.map(\.resourceServerId), ["rs-1"])
+        XCTAssertEqual(permissionsState.resourceServerName(for: "rs-1"), "Orders API")
+        XCTAssertEqual(permissionsState.resourceServerName(for: "rs-9"), "rs-9")
+    }
+
+    func testFormContentDoesNotSubmitInvalidValues() throws {
+        let captured = Captured<NamedResourceFormState>()
+        var submissions: [NamedResourceSubmission] = []
+
+        render(
+            BaseGroupCreate(onSubmit: { submissions.append($0) }) { state in
+                let _ = (captured.value = state)
+                TextField("Name", text: state.name)
+            }
+        )
+
+        let state = try XCTUnwrap(captured.value)
+        XCTAssertFalse(state.isValid)
+        state.submit()
+        XCTAssertTrue(submissions.isEmpty)
+    }
 }

@@ -6,7 +6,7 @@ import ThunderID
 
 /// An agent's overview, groups and roles, rendered from the data it is given. Deleting is offered
 /// only when `onDelete` is set, and never for a read-only agent.
-public struct BaseAgentDetails: View {
+public struct BaseAgentDetails<Content: View>: View {
     @EnvironmentObject private var i18n: ThunderIDI18n
     let agent: Agent?
     let groups: [MembershipGroup]
@@ -16,8 +16,9 @@ public struct BaseAgentDetails: View {
     let isDeleting: Bool
     let onDelete: (() -> Void)?
     let actions: AnyView?
+    let content: ((AgentDetailsState) -> Content)?
 
-    public init(
+    init(
         agent: Agent?,
         groups: [MembershipGroup] = [],
         roles: [String] = [],
@@ -25,7 +26,8 @@ public struct BaseAgentDetails: View {
         error: String? = nil,
         isDeleting: Bool = false,
         onDelete: (() -> Void)? = nil,
-        actions: AnyView? = nil
+        actions: AnyView? = nil,
+        renderContent: ((AgentDetailsState) -> Content)?
     ) {
         self.agent = agent
         self.groups = groups
@@ -35,9 +37,57 @@ public struct BaseAgentDetails: View {
         self.isDeleting = isDeleting
         self.onDelete = onDelete
         self.actions = actions
+        self.content = renderContent
+    }
+
+    /// - Parameter content: Renders custom UI in place of the default view, from the agent, its groups and roles,
+    ///   the loading and error state, and the delete action.
+    public init(
+        agent: Agent?,
+        groups: [MembershipGroup] = [],
+        roles: [String] = [],
+        isLoading: Bool = false,
+        error: String? = nil,
+        isDeleting: Bool = false,
+        onDelete: (() -> Void)? = nil,
+        actions: AnyView? = nil,
+        @ViewBuilder content: @escaping (AgentDetailsState) -> Content
+    ) {
+        self.init(
+            agent: agent,
+            groups: groups,
+            roles: roles,
+            isLoading: isLoading,
+            error: error,
+            isDeleting: isDeleting,
+            onDelete: onDelete,
+            actions: actions,
+            renderContent: content
+        )
     }
 
     public var body: some View {
+        if let content {
+            content(renderState)
+        } else {
+            defaultBody
+        }
+    }
+
+    private var renderState: AgentDetailsState {
+        AgentDetailsState(
+            agent: agent,
+            groups: groups,
+            roles: roles,
+            isLoading: isLoading,
+            error: error,
+            isDeleting: isDeleting,
+            onDelete: agent != nil && agent?.isReadOnly != true ? onDelete : nil
+        )
+    }
+
+    @ViewBuilder
+    private var defaultBody: some View {
         if let agent {
             details(agent)
         } else {
@@ -105,20 +155,70 @@ public struct BaseAgentDetails: View {
     }
 }
 
+public extension BaseAgentDetails where Content == EmptyView {
+    init(
+        agent: Agent?,
+        groups: [MembershipGroup] = [],
+        roles: [String] = [],
+        isLoading: Bool = false,
+        error: String? = nil,
+        isDeleting: Bool = false,
+        onDelete: (() -> Void)? = nil,
+        actions: AnyView? = nil
+    ) {
+        self.init(
+            agent: agent,
+            groups: groups,
+            roles: roles,
+            isLoading: isLoading,
+            error: error,
+            isDeleting: isDeleting,
+            onDelete: onDelete,
+            actions: actions,
+            renderContent: nil
+        )
+    }
+}
+
 /// An agent's details, loaded through the management API. Set `deletable` to let the signed-in
 /// user delete the agent; it is off by default, and a delete asks for confirmation first.
-public struct AgentDetails: View {
+public struct AgentDetails<Content: View>: View {
     @EnvironmentObject private var thunderState: ThunderIDState
     let agentId: String
     let deletable: Bool
     let onDeleted: (() -> Void)?
     let actions: AnyView?
+    let content: ((AgentDetailsState) -> Content)?
 
-    public init(agentId: String, deletable: Bool = false, onDeleted: (() -> Void)? = nil, actions: AnyView? = nil) {
+    init(
+        agentId: String,
+        deletable: Bool = false,
+        onDeleted: (() -> Void)? = nil,
+        actions: AnyView? = nil,
+        renderContent: ((AgentDetailsState) -> Content)?
+    ) {
         self.agentId = agentId
         self.deletable = deletable
         self.onDeleted = onDeleted
         self.actions = actions
+        self.content = renderContent
+    }
+
+    /// - Parameter content: Renders custom UI in place of the default view. See ``BaseAgentDetails``.
+    public init(
+        agentId: String,
+        deletable: Bool = false,
+        onDeleted: (() -> Void)? = nil,
+        actions: AnyView? = nil,
+        @ViewBuilder content: @escaping (AgentDetailsState) -> Content
+    ) {
+        self.init(
+            agentId: agentId,
+            deletable: deletable,
+            onDeleted: onDeleted,
+            actions: actions,
+            renderContent: content
+        )
     }
 
     public var body: some View {
@@ -126,15 +226,32 @@ public struct AgentDetails: View {
     }
 }
 
-private struct AgentDetailsHost: View {
+public extension AgentDetails where Content == EmptyView {
+    init(
+        agentId: String,
+        deletable: Bool = false,
+        onDeleted: (() -> Void)? = nil,
+        actions: AnyView? = nil
+    ) {
+        self.init(
+            agentId: agentId,
+            deletable: deletable,
+            onDeleted: onDeleted,
+            actions: actions,
+            renderContent: nil
+        )
+    }
+}
+
+private struct AgentDetailsHost<Content: View>: View {
     @EnvironmentObject private var i18n: ThunderIDI18n
     @StateObject private var agent: ResourceQuery<Agent>
     @StateObject private var groups: ResourceQuery<MembershipGroupListResponse>
     @StateObject private var roles: ResourceQuery<AgentRoleListResponse>
     @StateObject private var deletion: ResourceMutation<String, Void>
-    let props: AgentDetails
+    let props: AgentDetails<Content>
 
-    init(state: ThunderIDState, props: AgentDetails) {
+    init(state: ThunderIDState, props: AgentDetails<Content>) {
         _agent = StateObject(wrappedValue: state.agentQuery(id: props.agentId))
         _groups = StateObject(wrappedValue: state.agentGroupsQuery(agentId: props.agentId, limit: 100))
         _roles = StateObject(wrappedValue: state.agentRolesQuery(agentId: props.agentId, limit: 100))
@@ -152,7 +269,8 @@ private struct AgentDetailsHost: View {
                 ?? i18n.managementErrorMessage(deletion.error, fallbackKey: "admin.agents.details.delete.error"),
             isDeleting: deletion.isLoading,
             onDelete: props.deletable ? delete : nil,
-            actions: props.actions
+            actions: props.actions,
+            renderContent: props.content
         )
         .task {
             async let loadAgent: Void = { _ = await agent.refetch() }()

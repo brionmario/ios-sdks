@@ -7,7 +7,7 @@ import ThunderID
 /// The identities a role is assigned to, rendered from the data it is given. Assigning is offered
 /// when both `onAssign` and `candidates` are set, for each assignee type `candidates` has an entry
 /// for; unassigning when `onUnassign` is set.
-public struct BaseRoleAssignments: View {
+public struct BaseRoleAssignments<Content: View>: View {
     @EnvironmentObject private var i18n: ThunderIDI18n
     let assignments: [RoleAssignment]
     let candidates: [RoleAssigneeType: [IdentityCandidate]]?
@@ -18,8 +18,9 @@ public struct BaseRoleAssignments: View {
     let description: String?
     let onAssign: ((RoleAssignmentInput) -> Void)?
     let onUnassign: ((RoleAssignment) -> Void)?
+    let content: ((RoleAssignmentsState) -> Content)?
 
-    public init(
+    init(
         assignments: [RoleAssignment],
         candidates: [RoleAssigneeType: [IdentityCandidate]]? = nil,
         isLoading: Bool = false,
@@ -28,7 +29,8 @@ public struct BaseRoleAssignments: View {
         title: String? = nil,
         description: String? = nil,
         onAssign: ((RoleAssignmentInput) -> Void)? = nil,
-        onUnassign: ((RoleAssignment) -> Void)? = nil
+        onUnassign: ((RoleAssignment) -> Void)? = nil,
+        renderContent: ((RoleAssignmentsState) -> Content)?
     ) {
         self.assignments = assignments
         self.candidates = candidates
@@ -39,9 +41,59 @@ public struct BaseRoleAssignments: View {
         self.description = description
         self.onAssign = onAssign
         self.onUnassign = onUnassign
+        self.content = renderContent
+    }
+
+    /// - Parameter content: Renders custom UI in place of the default table and picker, from the assignments, the
+    ///   candidates, the loading and error state, and the assign and unassign actions.
+    public init(
+        assignments: [RoleAssignment],
+        candidates: [RoleAssigneeType: [IdentityCandidate]]? = nil,
+        isLoading: Bool = false,
+        error: String? = nil,
+        isMutating: Bool = false,
+        title: String? = nil,
+        description: String? = nil,
+        onAssign: ((RoleAssignmentInput) -> Void)? = nil,
+        onUnassign: ((RoleAssignment) -> Void)? = nil,
+        @ViewBuilder content: @escaping (RoleAssignmentsState) -> Content
+    ) {
+        self.init(
+            assignments: assignments,
+            candidates: candidates,
+            isLoading: isLoading,
+            error: error,
+            isMutating: isMutating,
+            title: title,
+            description: description,
+            onAssign: onAssign,
+            onUnassign: onUnassign,
+            renderContent: content
+        )
     }
 
     public var body: some View {
+        if let content {
+            content(renderState)
+        } else {
+            defaultBody
+        }
+    }
+
+    private var renderState: RoleAssignmentsState {
+        RoleAssignmentsState(
+            assignments: assignments,
+            candidates: onAssign == nil ? nil : candidates,
+            isLoading: isLoading,
+            error: error,
+            isMutating: isMutating,
+            onAssign: candidates == nil ? nil : onAssign,
+            onUnassign: onUnassign
+        )
+    }
+
+    @ViewBuilder
+    private var defaultBody: some View {
         AdminIdentityTable(
             i18n: i18n,
             identifier: "admin-role-assignments",
@@ -66,21 +118,73 @@ public struct BaseRoleAssignments: View {
     }
 }
 
+public extension BaseRoleAssignments where Content == EmptyView {
+    init(
+        assignments: [RoleAssignment],
+        candidates: [RoleAssigneeType: [IdentityCandidate]]? = nil,
+        isLoading: Bool = false,
+        error: String? = nil,
+        isMutating: Bool = false,
+        title: String? = nil,
+        description: String? = nil,
+        onAssign: ((RoleAssignmentInput) -> Void)? = nil,
+        onUnassign: ((RoleAssignment) -> Void)? = nil
+    ) {
+        self.init(
+            assignments: assignments,
+            candidates: candidates,
+            isLoading: isLoading,
+            error: error,
+            isMutating: isMutating,
+            title: title,
+            description: description,
+            onAssign: onAssign,
+            onUnassign: onUnassign,
+            renderContent: nil
+        )
+    }
+}
+
 /// The identities a role is assigned to, loaded through the management API. Set `editable` to let
 /// the signed-in user assign the role to users, groups and agents and remove assignments; it is
 /// off by default.
-public struct RoleAssignments: View {
+public struct RoleAssignments<Content: View>: View {
     @EnvironmentObject private var thunderState: ThunderIDState
     let roleId: String
     let editable: Bool
     let title: String?
     let description: String?
+    let content: ((RoleAssignmentsState) -> Content)?
 
-    public init(roleId: String, editable: Bool = false, title: String? = nil, description: String? = nil) {
+    init(
+        roleId: String,
+        editable: Bool = false,
+        title: String? = nil,
+        description: String? = nil,
+        renderContent: ((RoleAssignmentsState) -> Content)?
+    ) {
         self.roleId = roleId
         self.editable = editable
         self.title = title
         self.description = description
+        self.content = renderContent
+    }
+
+    /// - Parameter content: Renders custom UI in place of the default table and picker. See ``BaseRoleAssignments``.
+    public init(
+        roleId: String,
+        editable: Bool = false,
+        title: String? = nil,
+        description: String? = nil,
+        @ViewBuilder content: @escaping (RoleAssignmentsState) -> Content
+    ) {
+        self.init(
+            roleId: roleId,
+            editable: editable,
+            title: title,
+            description: description,
+            renderContent: content
+        )
     }
 
     public var body: some View {
@@ -88,7 +192,24 @@ public struct RoleAssignments: View {
     }
 }
 
-private struct RoleAssignmentsHost: View {
+public extension RoleAssignments where Content == EmptyView {
+    init(
+        roleId: String,
+        editable: Bool = false,
+        title: String? = nil,
+        description: String? = nil
+    ) {
+        self.init(
+            roleId: roleId,
+            editable: editable,
+            title: title,
+            description: description,
+            renderContent: nil
+        )
+    }
+}
+
+private struct RoleAssignmentsHost<Content: View>: View {
     @EnvironmentObject private var i18n: ThunderIDI18n
     @StateObject private var assignments: ResourceQuery<RoleAssignmentListResponse>
     @StateObject private var users: ResourceQuery<ManagedUserListResponse>
@@ -96,9 +217,9 @@ private struct RoleAssignmentsHost: View {
     @StateObject private var agents: ResourceQuery<AgentListResponse>
     @StateObject private var assign: ResourceMutation<RoleAssignmentsInput, Void>
     @StateObject private var unassign: ResourceMutation<RoleAssignmentsInput, Void>
-    let props: RoleAssignments
+    let props: RoleAssignments<Content>
 
-    init(state: ThunderIDState, props: RoleAssignments) {
+    init(state: ThunderIDState, props: RoleAssignments<Content>) {
         _assignments = StateObject(wrappedValue: state.roleAssignmentsQuery(roleId: props.roleId, limit: 100))
         _users = StateObject(wrappedValue: state.usersQuery(limit: 100))
         _groups = StateObject(wrappedValue: state.groupsQuery(limit: 100))
@@ -122,7 +243,8 @@ private struct RoleAssignmentsHost: View {
             title: props.title,
             description: props.description,
             onAssign: props.editable ? addAssignment : nil,
-            onUnassign: props.editable ? removeAssignment : nil
+            onUnassign: props.editable ? removeAssignment : nil,
+            renderContent: props.content
         )
         .task {
             await assignments.refetch()

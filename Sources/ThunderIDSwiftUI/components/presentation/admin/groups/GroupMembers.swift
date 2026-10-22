@@ -7,7 +7,7 @@ import ThunderID
 /// A group's members, rendered from the data it is given. Adding is offered when both `onAdd` and
 /// `candidates` are set, for each member type `candidates` has an entry for; removing when
 /// `onRemove` is set.
-public struct BaseGroupMembers: View {
+public struct BaseGroupMembers<Content: View>: View {
     @EnvironmentObject private var i18n: ThunderIDI18n
     let members: [GroupMember]
     let candidates: [GroupMemberType: [IdentityCandidate]]?
@@ -18,8 +18,9 @@ public struct BaseGroupMembers: View {
     let description: String?
     let onAdd: ((GroupMemberInput) -> Void)?
     let onRemove: ((GroupMember) -> Void)?
+    let content: ((GroupMembersState) -> Content)?
 
-    public init(
+    init(
         members: [GroupMember],
         candidates: [GroupMemberType: [IdentityCandidate]]? = nil,
         isLoading: Bool = false,
@@ -28,7 +29,8 @@ public struct BaseGroupMembers: View {
         title: String? = nil,
         description: String? = nil,
         onAdd: ((GroupMemberInput) -> Void)? = nil,
-        onRemove: ((GroupMember) -> Void)? = nil
+        onRemove: ((GroupMember) -> Void)? = nil,
+        renderContent: ((GroupMembersState) -> Content)?
     ) {
         self.members = members
         self.candidates = candidates
@@ -39,9 +41,59 @@ public struct BaseGroupMembers: View {
         self.description = description
         self.onAdd = onAdd
         self.onRemove = onRemove
+        self.content = renderContent
+    }
+
+    /// - Parameter content: Renders custom UI in place of the default table and picker, from the members, the
+    ///   candidates, the loading and error state, and the add and remove actions.
+    public init(
+        members: [GroupMember],
+        candidates: [GroupMemberType: [IdentityCandidate]]? = nil,
+        isLoading: Bool = false,
+        error: String? = nil,
+        isMutating: Bool = false,
+        title: String? = nil,
+        description: String? = nil,
+        onAdd: ((GroupMemberInput) -> Void)? = nil,
+        onRemove: ((GroupMember) -> Void)? = nil,
+        @ViewBuilder content: @escaping (GroupMembersState) -> Content
+    ) {
+        self.init(
+            members: members,
+            candidates: candidates,
+            isLoading: isLoading,
+            error: error,
+            isMutating: isMutating,
+            title: title,
+            description: description,
+            onAdd: onAdd,
+            onRemove: onRemove,
+            renderContent: content
+        )
     }
 
     public var body: some View {
+        if let content {
+            content(renderState)
+        } else {
+            defaultBody
+        }
+    }
+
+    private var renderState: GroupMembersState {
+        GroupMembersState(
+            members: members,
+            candidates: onAdd == nil ? nil : candidates,
+            isLoading: isLoading,
+            error: error,
+            isMutating: isMutating,
+            onAdd: candidates == nil ? nil : onAdd,
+            onRemove: onRemove
+        )
+    }
+
+    @ViewBuilder
+    private var defaultBody: some View {
         AdminIdentityTable(
             i18n: i18n,
             identifier: "admin-group-members",
@@ -64,20 +116,72 @@ public struct BaseGroupMembers: View {
     }
 }
 
+public extension BaseGroupMembers where Content == EmptyView {
+    init(
+        members: [GroupMember],
+        candidates: [GroupMemberType: [IdentityCandidate]]? = nil,
+        isLoading: Bool = false,
+        error: String? = nil,
+        isMutating: Bool = false,
+        title: String? = nil,
+        description: String? = nil,
+        onAdd: ((GroupMemberInput) -> Void)? = nil,
+        onRemove: ((GroupMember) -> Void)? = nil
+    ) {
+        self.init(
+            members: members,
+            candidates: candidates,
+            isLoading: isLoading,
+            error: error,
+            isMutating: isMutating,
+            title: title,
+            description: description,
+            onAdd: onAdd,
+            onRemove: onRemove,
+            renderContent: nil
+        )
+    }
+}
+
 /// A group's members, loaded through the management API. Set `editable` to let the signed-in user
 /// add users and agents and remove members; it is off by default.
-public struct GroupMembers: View {
+public struct GroupMembers<Content: View>: View {
     @EnvironmentObject private var thunderState: ThunderIDState
     let groupId: String
     let editable: Bool
     let title: String?
     let description: String?
+    let content: ((GroupMembersState) -> Content)?
 
-    public init(groupId: String, editable: Bool = false, title: String? = nil, description: String? = nil) {
+    init(
+        groupId: String,
+        editable: Bool = false,
+        title: String? = nil,
+        description: String? = nil,
+        renderContent: ((GroupMembersState) -> Content)?
+    ) {
         self.groupId = groupId
         self.editable = editable
         self.title = title
         self.description = description
+        self.content = renderContent
+    }
+
+    /// - Parameter content: Renders custom UI in place of the default table and picker. See ``BaseGroupMembers``.
+    public init(
+        groupId: String,
+        editable: Bool = false,
+        title: String? = nil,
+        description: String? = nil,
+        @ViewBuilder content: @escaping (GroupMembersState) -> Content
+    ) {
+        self.init(
+            groupId: groupId,
+            editable: editable,
+            title: title,
+            description: description,
+            renderContent: content
+        )
     }
 
     public var body: some View {
@@ -85,16 +189,33 @@ public struct GroupMembers: View {
     }
 }
 
-private struct GroupMembersHost: View {
+public extension GroupMembers where Content == EmptyView {
+    init(
+        groupId: String,
+        editable: Bool = false,
+        title: String? = nil,
+        description: String? = nil
+    ) {
+        self.init(
+            groupId: groupId,
+            editable: editable,
+            title: title,
+            description: description,
+            renderContent: nil
+        )
+    }
+}
+
+private struct GroupMembersHost<Content: View>: View {
     @EnvironmentObject private var i18n: ThunderIDI18n
     @StateObject private var members: ResourceQuery<GroupMemberListResponse>
     @StateObject private var users: ResourceQuery<ManagedUserListResponse>
     @StateObject private var agents: ResourceQuery<AgentListResponse>
     @StateObject private var add: ResourceMutation<GroupMembersInput, ManagedGroup>
     @StateObject private var remove: ResourceMutation<GroupMembersInput, ManagedGroup>
-    let props: GroupMembers
+    let props: GroupMembers<Content>
 
-    init(state: ThunderIDState, props: GroupMembers) {
+    init(state: ThunderIDState, props: GroupMembers<Content>) {
         _members = StateObject(wrappedValue: state.groupMembersQuery(groupId: props.groupId, limit: 100))
         _users = StateObject(wrappedValue: state.usersQuery(limit: 100))
         _agents = StateObject(wrappedValue: state.agentsQuery(limit: 100))
@@ -119,7 +240,8 @@ private struct GroupMembersHost: View {
             title: props.title,
             description: props.description,
             onAdd: props.editable ? addMember : nil,
-            onRemove: props.editable ? removeMember : nil
+            onRemove: props.editable ? removeMember : nil,
+            renderContent: props.content
         )
         .task {
             await members.refetch()

@@ -6,7 +6,7 @@ import ThunderID
 
 /// A page of agents, rendered from the data it is given. Pair it with
 /// ``ThunderIDState/agentsQuery(limit:offset:fetcher:)`` or any other source; ``AgentList`` does that for you.
-public struct BaseAgentList: View {
+public struct BaseAgentList<Content: View>: View {
     @EnvironmentObject private var i18n: ThunderIDI18n
     let agents: [BasicAgent]
     let isLoading: Bool
@@ -20,8 +20,9 @@ public struct BaseAgentList: View {
     let onPageChange: ((Int) -> Void)?
     let onSelect: ((BasicAgent) -> Void)?
     let actions: AnyView?
+    let content: ((AdminListState<BasicAgent>) -> Content)?
 
-    public init(
+    init(
         agents: [BasicAgent],
         isLoading: Bool = false,
         error: String? = nil,
@@ -33,7 +34,8 @@ public struct BaseAgentList: View {
         selectedAgentId: String? = nil,
         onPageChange: ((Int) -> Void)? = nil,
         onSelect: ((BasicAgent) -> Void)? = nil,
-        actions: AnyView? = nil
+        actions: AnyView? = nil,
+        renderContent: ((AdminListState<BasicAgent>) -> Content)?
     ) {
         self.agents = agents
         self.isLoading = isLoading
@@ -47,9 +49,67 @@ public struct BaseAgentList: View {
         self.onPageChange = onPageChange
         self.onSelect = onSelect
         self.actions = actions
+        self.content = renderContent
+    }
+
+    /// - Parameter content: Renders custom UI in place of the default list, from the agents, the loading and error
+    ///   state, and the pagination and selection handlers.
+    public init(
+        agents: [BasicAgent],
+        isLoading: Bool = false,
+        error: String? = nil,
+        title: String? = nil,
+        description: String? = nil,
+        limit: Int = 20,
+        offset: Int = 0,
+        totalResults: Int? = nil,
+        selectedAgentId: String? = nil,
+        onPageChange: ((Int) -> Void)? = nil,
+        onSelect: ((BasicAgent) -> Void)? = nil,
+        actions: AnyView? = nil,
+        @ViewBuilder content: @escaping (AdminListState<BasicAgent>) -> Content
+    ) {
+        self.init(
+            agents: agents,
+            isLoading: isLoading,
+            error: error,
+            title: title,
+            description: description,
+            limit: limit,
+            offset: offset,
+            totalResults: totalResults,
+            selectedAgentId: selectedAgentId,
+            onPageChange: onPageChange,
+            onSelect: onSelect,
+            actions: actions,
+            renderContent: content
+        )
     }
 
     public var body: some View {
+        if let content {
+            content(renderState)
+        } else {
+            defaultBody
+        }
+    }
+
+    private var renderState: AdminListState<BasicAgent> {
+        AdminListState(
+            rows: agents,
+            isLoading: isLoading,
+            error: error,
+            limit: limit,
+            offset: offset,
+            totalResults: totalResults ?? agents.count,
+            selectedId: selectedAgentId,
+            onPageChange: onPageChange,
+            onSelect: onSelect
+        )
+    }
+
+    @ViewBuilder
+    private var defaultBody: some View {
         AdminSection(
             identifier: "admin-agent-list",
             title: title ?? i18n.resolve("admin.agents.list.title"),
@@ -87,9 +147,42 @@ public struct BaseAgentList: View {
     }
 }
 
+public extension BaseAgentList where Content == EmptyView {
+    init(
+        agents: [BasicAgent],
+        isLoading: Bool = false,
+        error: String? = nil,
+        title: String? = nil,
+        description: String? = nil,
+        limit: Int = 20,
+        offset: Int = 0,
+        totalResults: Int? = nil,
+        selectedAgentId: String? = nil,
+        onPageChange: ((Int) -> Void)? = nil,
+        onSelect: ((BasicAgent) -> Void)? = nil,
+        actions: AnyView? = nil
+    ) {
+        self.init(
+            agents: agents,
+            isLoading: isLoading,
+            error: error,
+            title: title,
+            description: description,
+            limit: limit,
+            offset: offset,
+            totalResults: totalResults,
+            selectedAgentId: selectedAgentId,
+            onPageChange: onPageChange,
+            onSelect: onSelect,
+            actions: actions,
+            renderContent: nil
+        )
+    }
+}
+
 /// A paginated list of the agents the signed-in user can see. Selecting a row calls `onSelect`;
 /// the application decides where that leads.
-public struct AgentList: View {
+public struct AgentList<Content: View>: View {
     @EnvironmentObject private var thunderState: ThunderIDState
     @EnvironmentObject private var i18n: ThunderIDI18n
     let limit: Int
@@ -100,13 +193,16 @@ public struct AgentList: View {
     let actions: AnyView?
     @State private var offset = 0
 
-    public init(
+    let content: ((AdminListState<BasicAgent>) -> Content)?
+
+    init(
         limit: Int = 20,
         title: String? = nil,
         description: String? = nil,
         selectedAgentId: String? = nil,
         onSelect: ((BasicAgent) -> Void)? = nil,
-        actions: AnyView? = nil
+        actions: AnyView? = nil,
+        renderContent: ((AdminListState<BasicAgent>) -> Content)?
     ) {
         self.limit = limit
         self.title = title
@@ -114,6 +210,28 @@ public struct AgentList: View {
         self.selectedAgentId = selectedAgentId
         self.onSelect = onSelect
         self.actions = actions
+        self.content = renderContent
+    }
+
+    /// - Parameter content: Renders custom UI in place of the default list. See ``BaseAgentList``.
+    public init(
+        limit: Int = 20,
+        title: String? = nil,
+        description: String? = nil,
+        selectedAgentId: String? = nil,
+        onSelect: ((BasicAgent) -> Void)? = nil,
+        actions: AnyView? = nil,
+        @ViewBuilder content: @escaping (AdminListState<BasicAgent>) -> Content
+    ) {
+        self.init(
+            limit: limit,
+            title: title,
+            description: description,
+            selectedAgentId: selectedAgentId,
+            onSelect: onSelect,
+            actions: actions,
+            renderContent: content
+        )
     }
 
     public var body: some View {
@@ -131,9 +249,31 @@ public struct AgentList: View {
                 selectedAgentId: selectedAgentId,
                 onPageChange: { offset = $0 },
                 onSelect: onSelect,
-                actions: actions
+                actions: actions,
+                renderContent: content
             )
         }
         .id("\(offset)|\(limit)")
+    }
+}
+
+public extension AgentList where Content == EmptyView {
+    init(
+        limit: Int = 20,
+        title: String? = nil,
+        description: String? = nil,
+        selectedAgentId: String? = nil,
+        onSelect: ((BasicAgent) -> Void)? = nil,
+        actions: AnyView? = nil
+    ) {
+        self.init(
+            limit: limit,
+            title: title,
+            description: description,
+            selectedAgentId: selectedAgentId,
+            onSelect: onSelect,
+            actions: actions,
+            renderContent: nil
+        )
     }
 }

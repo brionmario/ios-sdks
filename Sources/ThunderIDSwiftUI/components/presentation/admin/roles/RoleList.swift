@@ -6,7 +6,7 @@ import ThunderID
 
 /// A page of roles, rendered from the data it is given. Pair it with
 /// ``ThunderIDState/rolesQuery(limit:offset:fetcher:)`` or any other source; ``RoleList`` does that for you.
-public struct BaseRoleList: View {
+public struct BaseRoleList<Content: View>: View {
     @EnvironmentObject private var i18n: ThunderIDI18n
     let roles: [RoleSummary]
     let isLoading: Bool
@@ -20,8 +20,9 @@ public struct BaseRoleList: View {
     let onPageChange: ((Int) -> Void)?
     let onSelect: ((RoleSummary) -> Void)?
     let actions: AnyView?
+    let content: ((AdminListState<RoleSummary>) -> Content)?
 
-    public init(
+    init(
         roles: [RoleSummary],
         isLoading: Bool = false,
         error: String? = nil,
@@ -33,7 +34,8 @@ public struct BaseRoleList: View {
         selectedRoleId: String? = nil,
         onPageChange: ((Int) -> Void)? = nil,
         onSelect: ((RoleSummary) -> Void)? = nil,
-        actions: AnyView? = nil
+        actions: AnyView? = nil,
+        renderContent: ((AdminListState<RoleSummary>) -> Content)?
     ) {
         self.roles = roles
         self.isLoading = isLoading
@@ -47,9 +49,67 @@ public struct BaseRoleList: View {
         self.onPageChange = onPageChange
         self.onSelect = onSelect
         self.actions = actions
+        self.content = renderContent
+    }
+
+    /// - Parameter content: Renders custom UI in place of the default list, from the roles, the loading and error
+    ///   state, and the pagination and selection handlers.
+    public init(
+        roles: [RoleSummary],
+        isLoading: Bool = false,
+        error: String? = nil,
+        title: String? = nil,
+        description: String? = nil,
+        limit: Int = 20,
+        offset: Int = 0,
+        totalResults: Int? = nil,
+        selectedRoleId: String? = nil,
+        onPageChange: ((Int) -> Void)? = nil,
+        onSelect: ((RoleSummary) -> Void)? = nil,
+        actions: AnyView? = nil,
+        @ViewBuilder content: @escaping (AdminListState<RoleSummary>) -> Content
+    ) {
+        self.init(
+            roles: roles,
+            isLoading: isLoading,
+            error: error,
+            title: title,
+            description: description,
+            limit: limit,
+            offset: offset,
+            totalResults: totalResults,
+            selectedRoleId: selectedRoleId,
+            onPageChange: onPageChange,
+            onSelect: onSelect,
+            actions: actions,
+            renderContent: content
+        )
     }
 
     public var body: some View {
+        if let content {
+            content(renderState)
+        } else {
+            defaultBody
+        }
+    }
+
+    private var renderState: AdminListState<RoleSummary> {
+        AdminListState(
+            rows: roles,
+            isLoading: isLoading,
+            error: error,
+            limit: limit,
+            offset: offset,
+            totalResults: totalResults ?? roles.count,
+            selectedId: selectedRoleId,
+            onPageChange: onPageChange,
+            onSelect: onSelect
+        )
+    }
+
+    @ViewBuilder
+    private var defaultBody: some View {
         AdminSection(
             identifier: "admin-role-list",
             title: title ?? i18n.resolve("admin.roles.list.title"),
@@ -87,9 +147,42 @@ public struct BaseRoleList: View {
     }
 }
 
+public extension BaseRoleList where Content == EmptyView {
+    init(
+        roles: [RoleSummary],
+        isLoading: Bool = false,
+        error: String? = nil,
+        title: String? = nil,
+        description: String? = nil,
+        limit: Int = 20,
+        offset: Int = 0,
+        totalResults: Int? = nil,
+        selectedRoleId: String? = nil,
+        onPageChange: ((Int) -> Void)? = nil,
+        onSelect: ((RoleSummary) -> Void)? = nil,
+        actions: AnyView? = nil
+    ) {
+        self.init(
+            roles: roles,
+            isLoading: isLoading,
+            error: error,
+            title: title,
+            description: description,
+            limit: limit,
+            offset: offset,
+            totalResults: totalResults,
+            selectedRoleId: selectedRoleId,
+            onPageChange: onPageChange,
+            onSelect: onSelect,
+            actions: actions,
+            renderContent: nil
+        )
+    }
+}
+
 /// A paginated list of the roles the signed-in user can see. Selecting a row calls `onSelect`;
 /// the application decides where that leads.
-public struct RoleList: View {
+public struct RoleList<Content: View>: View {
     @EnvironmentObject private var thunderState: ThunderIDState
     @EnvironmentObject private var i18n: ThunderIDI18n
     let limit: Int
@@ -100,13 +193,16 @@ public struct RoleList: View {
     let actions: AnyView?
     @State private var offset = 0
 
-    public init(
+    let content: ((AdminListState<RoleSummary>) -> Content)?
+
+    init(
         limit: Int = 20,
         title: String? = nil,
         description: String? = nil,
         selectedRoleId: String? = nil,
         onSelect: ((RoleSummary) -> Void)? = nil,
-        actions: AnyView? = nil
+        actions: AnyView? = nil,
+        renderContent: ((AdminListState<RoleSummary>) -> Content)?
     ) {
         self.limit = limit
         self.title = title
@@ -114,6 +210,28 @@ public struct RoleList: View {
         self.selectedRoleId = selectedRoleId
         self.onSelect = onSelect
         self.actions = actions
+        self.content = renderContent
+    }
+
+    /// - Parameter content: Renders custom UI in place of the default list. See ``BaseRoleList``.
+    public init(
+        limit: Int = 20,
+        title: String? = nil,
+        description: String? = nil,
+        selectedRoleId: String? = nil,
+        onSelect: ((RoleSummary) -> Void)? = nil,
+        actions: AnyView? = nil,
+        @ViewBuilder content: @escaping (AdminListState<RoleSummary>) -> Content
+    ) {
+        self.init(
+            limit: limit,
+            title: title,
+            description: description,
+            selectedRoleId: selectedRoleId,
+            onSelect: onSelect,
+            actions: actions,
+            renderContent: content
+        )
     }
 
     public var body: some View {
@@ -131,9 +249,31 @@ public struct RoleList: View {
                 selectedRoleId: selectedRoleId,
                 onPageChange: { offset = $0 },
                 onSelect: onSelect,
-                actions: actions
+                actions: actions,
+                renderContent: content
             )
         }
         .id("\(offset)|\(limit)")
+    }
+}
+
+public extension RoleList where Content == EmptyView {
+    init(
+        limit: Int = 20,
+        title: String? = nil,
+        description: String? = nil,
+        selectedRoleId: String? = nil,
+        onSelect: ((RoleSummary) -> Void)? = nil,
+        actions: AnyView? = nil
+    ) {
+        self.init(
+            limit: limit,
+            title: title,
+            description: description,
+            selectedRoleId: selectedRoleId,
+            onSelect: onSelect,
+            actions: actions,
+            renderContent: nil
+        )
     }
 }

@@ -21,7 +21,7 @@ func stringifyManagedAttribute(_ value: AnyCodable) -> String {
 
 /// A user's attributes and groups, rendered from the data it is given. Editing and deleting are
 /// offered only when `onUpdate` and `onDelete` are set, and never for a read-only user.
-public struct BaseUserDetails: View {
+public struct BaseUserDetails<Content: View>: View {
     @EnvironmentObject private var i18n: ThunderIDI18n
     let user: ManagedUser?
     let groups: [MembershipGroup]
@@ -36,7 +36,9 @@ public struct BaseUserDetails: View {
 
     @State private var draft: [String: String]?
 
-    public init(
+    let content: ((UserDetailsState) -> Content)?
+
+    init(
         user: ManagedUser?,
         groups: [MembershipGroup] = [],
         hiddenAttributes: Set<String> = ["password"],
@@ -46,7 +48,8 @@ public struct BaseUserDetails: View {
         isUpdating: Bool = false,
         onDelete: (() -> Void)? = nil,
         onUpdate: (([String: AnyCodable]) -> Void)? = nil,
-        actions: AnyView? = nil
+        actions: AnyView? = nil,
+        renderContent: ((UserDetailsState) -> Content)?
     ) {
         self.user = user
         self.groups = groups
@@ -58,9 +61,65 @@ public struct BaseUserDetails: View {
         self.onDelete = onDelete
         self.onUpdate = onUpdate
         self.actions = actions
+        self.content = renderContent
+    }
+
+    /// - Parameter content: Renders custom UI in place of the default view, from the user, their visible attributes
+    ///   and groups, the loading and error state, and the delete and update actions.
+    public init(
+        user: ManagedUser?,
+        groups: [MembershipGroup] = [],
+        hiddenAttributes: Set<String> = ["password"],
+        isLoading: Bool = false,
+        error: String? = nil,
+        isDeleting: Bool = false,
+        isUpdating: Bool = false,
+        onDelete: (() -> Void)? = nil,
+        onUpdate: (([String: AnyCodable]) -> Void)? = nil,
+        actions: AnyView? = nil,
+        @ViewBuilder content: @escaping (UserDetailsState) -> Content
+    ) {
+        self.init(
+            user: user,
+            groups: groups,
+            hiddenAttributes: hiddenAttributes,
+            isLoading: isLoading,
+            error: error,
+            isDeleting: isDeleting,
+            isUpdating: isUpdating,
+            onDelete: onDelete,
+            onUpdate: onUpdate,
+            actions: actions,
+            renderContent: content
+        )
     }
 
     public var body: some View {
+        if let content {
+            content(renderState)
+        } else {
+            defaultBody
+        }
+    }
+
+    private var renderState: UserDetailsState {
+        let isWritable = user != nil && user?.isReadOnly != true
+        return UserDetailsState(
+            user: user,
+            displayName: user?.resolvedName ?? "",
+            attributes: (user?.attributes ?? [:]).filter { !hiddenAttributes.contains($0.key) },
+            groups: groups,
+            isLoading: isLoading,
+            error: error,
+            isDeleting: isDeleting,
+            isUpdating: isUpdating,
+            onDelete: isWritable ? onDelete : nil,
+            onUpdate: isWritable ? onUpdate : nil
+        )
+    }
+
+    @ViewBuilder
+    private var defaultBody: some View {
         if let user {
             details(user)
         } else {
@@ -168,10 +227,39 @@ public struct BaseUserDetails: View {
     }
 }
 
+public extension BaseUserDetails where Content == EmptyView {
+    init(
+        user: ManagedUser?,
+        groups: [MembershipGroup] = [],
+        hiddenAttributes: Set<String> = ["password"],
+        isLoading: Bool = false,
+        error: String? = nil,
+        isDeleting: Bool = false,
+        isUpdating: Bool = false,
+        onDelete: (() -> Void)? = nil,
+        onUpdate: (([String: AnyCodable]) -> Void)? = nil,
+        actions: AnyView? = nil
+    ) {
+        self.init(
+            user: user,
+            groups: groups,
+            hiddenAttributes: hiddenAttributes,
+            isLoading: isLoading,
+            error: error,
+            isDeleting: isDeleting,
+            isUpdating: isUpdating,
+            onDelete: onDelete,
+            onUpdate: onUpdate,
+            actions: actions,
+            renderContent: nil
+        )
+    }
+}
+
 /// A user's details, loaded through the management API. Set `editable` to let the signed-in user
 /// edit text attributes and `deletable` to let them delete the user; both are off by default, and a
 /// delete asks for confirmation first.
-public struct UserDetails: View {
+public struct UserDetails<Content: View>: View {
     @EnvironmentObject private var thunderState: ThunderIDState
     let userId: String
     let editable: Bool
@@ -179,14 +267,16 @@ public struct UserDetails: View {
     let hiddenAttributes: Set<String>
     let onDeleted: (() -> Void)?
     let actions: AnyView?
+    let content: ((UserDetailsState) -> Content)?
 
-    public init(
+    init(
         userId: String,
         editable: Bool = false,
         deletable: Bool = false,
         hiddenAttributes: Set<String> = ["password"],
         onDeleted: (() -> Void)? = nil,
-        actions: AnyView? = nil
+        actions: AnyView? = nil,
+        renderContent: ((UserDetailsState) -> Content)?
     ) {
         self.userId = userId
         self.editable = editable
@@ -194,6 +284,28 @@ public struct UserDetails: View {
         self.hiddenAttributes = hiddenAttributes
         self.onDeleted = onDeleted
         self.actions = actions
+        self.content = renderContent
+    }
+
+    /// - Parameter content: Renders custom UI in place of the default view. See ``BaseUserDetails``.
+    public init(
+        userId: String,
+        editable: Bool = false,
+        deletable: Bool = false,
+        hiddenAttributes: Set<String> = ["password"],
+        onDeleted: (() -> Void)? = nil,
+        actions: AnyView? = nil,
+        @ViewBuilder content: @escaping (UserDetailsState) -> Content
+    ) {
+        self.init(
+            userId: userId,
+            editable: editable,
+            deletable: deletable,
+            hiddenAttributes: hiddenAttributes,
+            onDeleted: onDeleted,
+            actions: actions,
+            renderContent: content
+        )
     }
 
     public var body: some View {
@@ -201,15 +313,36 @@ public struct UserDetails: View {
     }
 }
 
-private struct UserDetailsHost: View {
+public extension UserDetails where Content == EmptyView {
+    init(
+        userId: String,
+        editable: Bool = false,
+        deletable: Bool = false,
+        hiddenAttributes: Set<String> = ["password"],
+        onDeleted: (() -> Void)? = nil,
+        actions: AnyView? = nil
+    ) {
+        self.init(
+            userId: userId,
+            editable: editable,
+            deletable: deletable,
+            hiddenAttributes: hiddenAttributes,
+            onDeleted: onDeleted,
+            actions: actions,
+            renderContent: nil
+        )
+    }
+}
+
+private struct UserDetailsHost<Content: View>: View {
     @EnvironmentObject private var i18n: ThunderIDI18n
     @StateObject private var user: ResourceQuery<ManagedUser>
     @StateObject private var groups: ResourceQuery<MembershipGroupListResponse>
     @StateObject private var deletion: ResourceMutation<String, Void>
     @StateObject private var update: ResourceMutation<(id: String, request: UpdateManagedUserRequest), ManagedUser>
-    let props: UserDetails
+    let props: UserDetails<Content>
 
-    init(state: ThunderIDState, props: UserDetails) {
+    init(state: ThunderIDState, props: UserDetails<Content>) {
         _user = StateObject(wrappedValue: state.userQuery(id: props.userId))
         _groups = StateObject(wrappedValue: state.userGroupsQuery(userId: props.userId, limit: 100))
         _deletion = StateObject(wrappedValue: state.deleteUserMutation())
@@ -230,7 +363,8 @@ private struct UserDetailsHost: View {
             isUpdating: update.isLoading,
             onDelete: props.deletable ? delete : nil,
             onUpdate: props.editable && user.data != nil ? save : nil,
-            actions: props.actions
+            actions: props.actions,
+            renderContent: props.content
         )
         .task {
             async let loadUser: Void = { _ = await user.refetch() }()
