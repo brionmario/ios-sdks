@@ -41,8 +41,8 @@ struct ComponentSpec: Identifiable {
 }
 
 enum ExplorerCatalog {
-    static func components(applicationId: String) -> [ComponentSpec] {
-        actions + user + [languageSwitcher, logo] + flows(applicationId: applicationId) + [guards]
+    static func components(applicationId: String, ids: AdminStoryIds = AdminStoryIds()) -> [ComponentSpec] {
+        actions + user + [languageSwitcher, logo] + flows(applicationId: applicationId) + [guards] + admin(ids: ids)
     }
 
     // MARK: - Actions
